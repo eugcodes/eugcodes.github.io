@@ -22,7 +22,7 @@ const ALIGNMENT = 0.032;
 const COHESION = 0.004;
 const MOUSE_RADIUS = 250;
 const MOUSE_FORCE = 0.08;
-const BOUNDARY_MARGIN = 80;
+const BOUNDARY_AWARENESS = 220;
 const TURN_FACTOR = 0.15;
 const MAX_NEIGHBORS = 7;
 
@@ -120,9 +120,9 @@ function createBirds() {
 // ============================================================
 function drawSky() {
     const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0.0,  '#060d1a');
-    grad.addColorStop(0.18, '#0c1530');
-    grad.addColorStop(0.35, '#1a0e2e');
+    grad.addColorStop(0.0,  '#04101f');
+    grad.addColorStop(0.18, '#091a42');
+    grad.addColorStop(0.35, '#1a1238');
     grad.addColorStop(0.52, '#3d1030');
     grad.addColorStop(0.67, '#681520');
     grad.addColorStop(0.80, '#7d1c1e');
@@ -247,11 +247,14 @@ function updateBirds(time) {
             }
         }
 
-        // Soft boundary avoidance
-        if (bird.x < BOUNDARY_MARGIN) bird.vx += TURN_FACTOR;
-        if (bird.x > width - BOUNDARY_MARGIN) bird.vx -= TURN_FACTOR;
-        if (bird.y < BOUNDARY_MARGIN) bird.vy += TURN_FACTOR;
-        if (bird.y > height - BOUNDARY_MARGIN) bird.vy -= TURN_FACTOR * 1.5;
+        // Graduated boundary avoidance — force scales as a quadratic of
+        // proximity so birds begin curving well before reaching the edge
+        const bL = bird.x, bR = width - bird.x;
+        const bT = bird.y, bB = height - bird.y;
+        if (bL < BOUNDARY_AWARENESS) bird.vx += TURN_FACTOR * Math.pow(1 - bL / BOUNDARY_AWARENESS, 2);
+        if (bR < BOUNDARY_AWARENESS) bird.vx -= TURN_FACTOR * Math.pow(1 - bR / BOUNDARY_AWARENESS, 2);
+        if (bT < BOUNDARY_AWARENESS) bird.vy += TURN_FACTOR * Math.pow(1 - bT / BOUNDARY_AWARENESS, 2);
+        if (bB < BOUNDARY_AWARENESS) bird.vy -= TURN_FACTOR * 1.5 * Math.pow(1 - bB / BOUNDARY_AWARENESS, 2);
 
         // Speed clamp
         const speed = Math.sqrt(bird.vx * bird.vx + bird.vy * bird.vy);
@@ -287,7 +290,7 @@ function drawBirds() {
     }
 
     const alphas = [0.25, 0.45, 0.65, 0.85];
-    ctx.fillStyle = '#151010';
+    ctx.fillStyle = '#d4a090';
 
     for (let b = 0; b < 4; b++) {
         const band = bands[b];
