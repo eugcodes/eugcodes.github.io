@@ -9,16 +9,14 @@ const ctx = canvas.getContext('2d');
 let width, height, dpr;
 let mouseX = 0, mouseY = 0, mouseActive = false, mouseStrength = 0;
 let birds = [];
-let treeCache = null;
-let groundCache = null;
 let numBirds = 450;
 const startTime = performance.now();
 
 // --- Configuration ---
 const VISUAL_RANGE = 65;
 const PROTECTED_RANGE = 22;
-const MAX_SPEED = 3.5;
-const MIN_SPEED = 1.5;
+const MAX_SPEED = 2.0;
+const MIN_SPEED = 0.8;
 const SEPARATION = 0.05;
 const ALIGNMENT = 0.045;
 const COHESION = 0.004;
@@ -27,17 +25,6 @@ const MOUSE_FORCE = 0.08;
 const BOUNDARY_MARGIN = 80;
 const TURN_FACTOR = 0.15;
 const MAX_NEIGHBORS = 7;
-
-// --- Seeded PRNG (Mulberry32) ---
-function seededRandom(seed) {
-    return function () {
-        seed |= 0;
-        seed = (seed + 0x6d2b79f5) | 0;
-        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
 
 // ============================================================
 // Spatial Grid — O(n) neighbour look-ups for Boids
@@ -126,140 +113,22 @@ function createBirds() {
     }
 }
 
-// ============================================================
-// Procedural tree generation (recursive branching)
-// ============================================================
-function buildBranch(tctx, x, y, angle, length, depth, rng) {
-    if (depth <= 0 || length < 1.5) return;
-
-    const endX = x + Math.cos(angle) * length;
-    const endY = y + Math.sin(angle) * length;
-
-    tctx.beginPath();
-    tctx.moveTo(x, y);
-    tctx.lineTo(endX, endY);
-    tctx.lineWidth = Math.max(0.5, depth * 0.7);
-    tctx.stroke();
-
-    const numBranches = depth > 5 ? (rng() > 0.6 ? 3 : 2) : 2;
-    const spread = 0.3 + rng() * 0.25;
-    const shrink = 0.62 + rng() * 0.16;
-
-    for (let i = 0; i < numBranches; i++) {
-        const ba =
-            angle +
-            (i - (numBranches - 1) / 2) * spread +
-            (rng() - 0.5) * 0.15;
-        buildBranch(tctx, endX, endY, ba, length * shrink, depth - 1, rng);
-    }
-}
-
-function generateScenery() {
-    // ----- Trees (offscreen canvas) -----
-    const treeOff = document.createElement('canvas');
-    treeOff.width = width * dpr;
-    treeOff.height = height * dpr;
-    const tctx = treeOff.getContext('2d');
-    tctx.scale(dpr, dpr);
-    tctx.strokeStyle = '#080605';
-    tctx.lineCap = 'round';
-
-    const treeDefs = [
-        { x: 0.06, y: 0.88, scale: 0.95, seed: 101 },
-        { x: 0.15, y: 0.90, scale: 0.55, seed: 202 },
-        { x: 0.23, y: 0.895, scale: 0.72, seed: 303 },
-        { x: 0.74, y: 0.87, scale: 1.0, seed: 404 },
-        { x: 0.84, y: 0.895, scale: 0.52, seed: 505 },
-        { x: 0.93, y: 0.88, scale: 0.78, seed: 606 },
-    ];
-
-    for (const td of treeDefs) {
-        const rng = seededRandom(td.seed);
-        const trunkLen = height * 0.11 * td.scale;
-        buildBranch(
-            tctx,
-            width * td.x,
-            height * td.y,
-            -Math.PI / 2 + (rng() - 0.5) * 0.08,
-            trunkLen,
-            9,
-            rng
-        );
-    }
-
-    treeCache = treeOff;
-
-    // ----- Rolling-hill ground (offscreen canvas) -----
-    const groundOff = document.createElement('canvas');
-    groundOff.width = width * dpr;
-    groundOff.height = height * dpr;
-    const gctx = groundOff.getContext('2d');
-    gctx.scale(dpr, dpr);
-    gctx.fillStyle = '#080605';
-    gctx.beginPath();
-    gctx.moveTo(0, height);
-
-    for (let x = 0; x <= width; x += 2) {
-        const y =
-            height * 0.88 +
-            Math.sin(x * 0.003 + 0.5) * height * 0.015 +
-            Math.sin(x * 0.0008 + 2.0) * height * 0.01 +
-            Math.sin(x * 0.006) * height * 0.005;
-        gctx.lineTo(x, y);
-    }
-
-    gctx.lineTo(width, height);
-    gctx.closePath();
-    gctx.fill();
-    groundCache = groundOff;
-}
 
 // ============================================================
 // Sky / Sunset
 // ============================================================
-function drawSky(time) {
-    const breathe = Math.sin(time * 0.00005) * 0.03;
-
-    // Gradient sky
+function drawSky() {
     const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0.0, '#0d1b2a');
-    grad.addColorStop(0.25, '#1b2838');
-    grad.addColorStop(0.45, '#3d2645');
-    grad.addColorStop(0.60, '#6b3a5a');
-    grad.addColorStop(0.73, '#a8624a');
-    grad.addColorStop(0.83, '#d4944d');
-    grad.addColorStop(0.90, '#e8a95d');
-    grad.addColorStop(1.0, '#b07040');
+    grad.addColorStop(0.0,  '#080408');
+    grad.addColorStop(0.20, '#150810');
+    grad.addColorStop(0.40, '#3d1020');
+    grad.addColorStop(0.58, '#6b1520');
+    grad.addColorStop(0.72, '#8b1f20');
+    grad.addColorStop(0.84, '#a83020');
+    grad.addColorStop(0.93, '#c04028');
+    grad.addColorStop(1.0,  '#7a1f18');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
-
-    // Sun position (barely drifts)
-    const sunX = width * 0.35;
-    const sunY = height * 0.82 + Math.sin(time * 0.00003) * height * 0.01;
-    const sunR = Math.min(width, height) * 0.065;
-
-    // Wide atmospheric glow
-    const glow = ctx.createRadialGradient(
-        sunX, sunY, sunR * 0.3,
-        sunX, sunY, sunR * 7
-    );
-    glow.addColorStop(0, `rgba(255,210,140,${(0.35 + breathe).toFixed(3)})`);
-    glow.addColorStop(0.15, `rgba(255,180,100,${(0.15 + breathe).toFixed(3)})`);
-    glow.addColorStop(0.4, 'rgba(255,140,70,0.05)');
-    glow.addColorStop(1, 'rgba(255,100,50,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, width, height);
-
-    // Sun disc
-    const disc = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
-    disc.addColorStop(0, 'rgba(255,240,200,0.95)');
-    disc.addColorStop(0.5, 'rgba(255,210,150,0.85)');
-    disc.addColorStop(0.85, 'rgba(255,180,110,0.5)');
-    disc.addColorStop(1, 'rgba(255,150,80,0)');
-    ctx.fillStyle = disc;
-    ctx.beginPath();
-    ctx.arc(sunX, sunY, sunR * 1.3, 0, Math.PI * 2);
-    ctx.fill();
 }
 
 // ============================================================
@@ -282,8 +151,6 @@ function updateBirds(time) {
     // Smooth mouse influence
     const targetStrength = mouseActive ? 1 : 0;
     mouseStrength += (targetStrength - mouseStrength) * 0.05;
-
-    const treeLineY = height * 0.78;
 
     for (let i = 0; i < birds.length; i++) {
         const bird = birds[i];
@@ -369,7 +236,7 @@ function updateBirds(time) {
         if (bird.x < BOUNDARY_MARGIN) bird.vx += TURN_FACTOR;
         if (bird.x > width - BOUNDARY_MARGIN) bird.vx -= TURN_FACTOR;
         if (bird.y < BOUNDARY_MARGIN) bird.vy += TURN_FACTOR;
-        if (bird.y > treeLineY) bird.vy -= TURN_FACTOR * 1.5;
+        if (bird.y > height - BOUNDARY_MARGIN) bird.vy -= TURN_FACTOR * 1.5;
 
         // Speed clamp
         const speed = Math.sqrt(bird.vx * bird.vx + bird.vy * bird.vy);
@@ -460,8 +327,6 @@ function resize() {
 
     // Scale bird count to screen area (min 150, max 500)
     numBirds = Math.max(150, Math.min(500, Math.floor((width * height) / 3500)));
-
-    generateScenery();
 }
 
 // ============================================================
@@ -472,10 +337,7 @@ function animate(timestamp) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    drawSky(time);
-
-    if (groundCache) ctx.drawImage(groundCache, 0, 0, width, height);
-    if (treeCache) ctx.drawImage(treeCache, 0, 0, width, height);
+    drawSky();
 
     updateBirds(time);
     drawBirds();
