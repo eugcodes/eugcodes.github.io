@@ -18,7 +18,7 @@ const PROTECTED_RANGE = 22;
 const MAX_SPEED = 2.0;
 const MIN_SPEED = 0.8;
 const SEPARATION = 0.05;
-const ALIGNMENT = 0.045;
+const ALIGNMENT = 0.032;
 const COHESION = 0.004;
 const MOUSE_RADIUS = 250;
 const MOUSE_FORCE = 0.08;
@@ -108,6 +108,7 @@ function createBirds() {
             vy: Math.sin(angle) * speed,
             size: 1.4 + Math.random() * 1.6,
             alpha: 0.3 + Math.random() * 0.55,
+            phase: Math.random() * Math.PI * 2,
             _distSq: 0,
         });
     }
@@ -119,14 +120,14 @@ function createBirds() {
 // ============================================================
 function drawSky() {
     const grad = ctx.createLinearGradient(0, 0, 0, height);
-    grad.addColorStop(0.0,  '#080408');
-    grad.addColorStop(0.20, '#150810');
-    grad.addColorStop(0.40, '#3d1020');
-    grad.addColorStop(0.58, '#6b1520');
-    grad.addColorStop(0.72, '#8b1f20');
-    grad.addColorStop(0.84, '#a83020');
-    grad.addColorStop(0.93, '#c04028');
-    grad.addColorStop(1.0,  '#7a1f18');
+    grad.addColorStop(0.0,  '#060d1a');
+    grad.addColorStop(0.18, '#0c1530');
+    grad.addColorStop(0.35, '#1a0e2e');
+    grad.addColorStop(0.52, '#3d1030');
+    grad.addColorStop(0.67, '#681520');
+    grad.addColorStop(0.80, '#7d1c1e');
+    grad.addColorStop(0.91, '#8e1f1e');
+    grad.addColorStop(1.0,  '#5e1214');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 }
@@ -143,10 +144,17 @@ function updateBirds(time) {
     const windX = Math.sin(t * 0.08) * 0.015;
     const windY = Math.cos(t * 0.06) * 0.008;
 
-    // Slowly orbiting global attractor keeps flock centered and sweeping
-    const aTime = time * 0.0003;
-    const attractX = width * 0.5 + Math.cos(aTime) * width * 0.2;
-    const attractY = height * 0.35 + Math.sin(aTime * 0.7) * height * 0.12;
+    // Two quasi-periodic attractors on Lissajous-like paths (golden/silver ratios
+    // ensure the paths never cleanly repeat, breaking circular formations)
+    const aTime = time * 0.0002;
+    const a1x = width  * 0.5  + Math.cos(aTime * 1.0)   * width  * 0.22
+                               + Math.cos(aTime * 1.618) * width  * 0.07;
+    const a1y = height * 0.38 + Math.sin(aTime * 0.7)   * height * 0.14
+                               + Math.sin(aTime * 2.414) * height * 0.04;
+    const a2x = width  * 0.5  + Math.cos(aTime * 0.618 + 2.1) * width  * 0.18
+                               + Math.cos(aTime * 1.3   + 0.9) * width  * 0.09;
+    const a2y = height * 0.42 + Math.sin(aTime * 0.8   + 1.5) * height * 0.11
+                               + Math.sin(aTime * 1.732 + 0.3) * height * 0.05;
 
     // Smooth mouse influence
     const targetStrength = mouseActive ? 1 : 0;
@@ -198,18 +206,25 @@ function updateBirds(time) {
         bird.vx += windX;
         bird.vy += windY;
 
-        // Gentle global attractor (sweeping arcs)
-        const adx = attractX - bird.x;
-        const ady = attractY - bird.y;
-        const adist = Math.sqrt(adx * adx + ady * ady);
-        if (adist > 1) {
-            bird.vx += (adx / adist) * 0.005;
-            bird.vy += (ady / adist) * 0.005;
+        // Dual attractor pull — birds are influenced by whichever is closer
+        const a1dx = a1x - bird.x, a1dy = a1y - bird.y;
+        const a1dist = Math.sqrt(a1dx * a1dx + a1dy * a1dy);
+        const a2dx = a2x - bird.x, a2dy = a2y - bird.y;
+        const a2dist = Math.sqrt(a2dx * a2dx + a2dy * a2dy);
+        if (a1dist > 1) {
+            bird.vx += (a1dx / a1dist) * 0.004;
+            bird.vy += (a1dy / a1dist) * 0.004;
+        }
+        if (a2dist > 1) {
+            bird.vx += (a2dx / a2dist) * 0.003;
+            bird.vy += (a2dy / a2dist) * 0.003;
         }
 
-        // Subtle wander
-        bird.vx += (Math.random() - 0.5) * 0.08;
-        bird.vy += (Math.random() - 0.5) * 0.08;
+        // Per-bird oscillating wander — each bird has its own phase so
+        // sub-groups don't all receive the same perturbation simultaneously
+        const bp = bird.phase + t * 0.3;
+        bird.vx += Math.sin(bp * 1.3  + 0.5) * 0.03 + (Math.random() - 0.5) * 0.06;
+        bird.vy += Math.cos(bp * 1.07 + 1.2) * 0.02 + (Math.random() - 0.5) * 0.06;
 
         // Mouse / touch influence
         if (mouseStrength > 0.01) {
