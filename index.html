@@ -1,42 +1,297 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eugene Kim</title>
-    <meta name="description"
-        content="Eugene Kim - Engineer/lawyer focused on technical AI Governance.">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eugene Kim</title>
+  <meta name="description" content="Eugene Kim">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    body {
+      overflow: hidden;
+      background: #1a0a1e;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
 
-    <link rel="stylesheet" href="style.css">
+    canvas { display: block; }
+
+    .contact {
+      position: fixed;
+      bottom: 2.5rem;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: rgba(255, 235, 220, 0.7);
+      font-size: 0.85rem;
+      letter-spacing: 0.25em;
+      font-weight: 300;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .contact a {
+      color: inherit;
+      text-decoration: none;
+      pointer-events: auto;
+      transition: color 0.4s ease;
+    }
+
+    .contact a:hover {
+      color: rgba(255, 235, 220, 1);
+    }
+  </style>
 </head>
-
 <body>
-    <canvas id="bg-canvas"></canvas>
+  <div class="contact"><a href="mailto:contact@eugenekim.ca">contact@eugenekim.ca</a></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    (() => {
+      /* ── Configuration ── */
+      const BOID_COUNT = 600;
+      const BOUNDS = 45;
+      const MAX_SPEED = 0.38;
+      const MIN_SPEED = 0.15;
+      const SEPARATION_DIST = 2.8;
+      const ALIGNMENT_DIST = 6.5;
+      const COHESION_DIST = 8.0;
+      const SEPARATION_FORCE = 0.045;
+      const ALIGNMENT_FORCE = 0.035;
+      const COHESION_FORCE = 0.025;
+      const WANDER_FORCE = 0.008;
+      const BOUNDARY_FORCE = 0.06;
 
-    <main class="content">
-        <!-- Header removed as requested -->
+      /* ── Scene setup ── */
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+      camera.position.set(0, 5, 60);
 
-        <!-- Bio section removed as requested -->
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      document.body.appendChild(renderer.domElement);
 
-        <footer>
-            <a href="mailto:contact@eugenekim.ca" class="link-item">contact@eugenekim.ca</a>
-            <a href="https://www.linkedin.com/in/eugenekimlinkedin" target="_blank" rel="noopener noreferrer"
-                class="icon-link" aria-label="LinkedIn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path
-                        d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
-                </svg>
-            </a>
-        </footer>
-    </main>
+      /* ── Sunset gradient background ── */
+      const bgCanvas = document.createElement('canvas');
+      bgCanvas.width = 2;
+      bgCanvas.height = 512;
+      const bgCtx = bgCanvas.getContext('2d');
+      const grad = bgCtx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0.0, '#0d0a2e');
+      grad.addColorStop(0.25, '#2a1245');
+      grad.addColorStop(0.45, '#6b2548');
+      grad.addColorStop(0.6, '#c44a32');
+      grad.addColorStop(0.75, '#e8833a');
+      grad.addColorStop(0.88, '#f5c25a');
+      grad.addColorStop(1.0, '#fff4d6');
+      bgCtx.fillStyle = grad;
+      bgCtx.fillRect(0, 0, 2, 512);
+      const bgTexture = new THREE.CanvasTexture(bgCanvas);
+      scene.background = bgTexture;
 
-    <script src="script.js"></script>
+      /* ── Subtle fog ── */
+      scene.fog = new THREE.FogExp2(0x3a1530, 0.008);
+
+      /* ── Bird geometry (elongated tetrahedron) ── */
+      const birdGeo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+         0.0,  0.0, -0.8,
+        -0.25, 0.0,  0.3,
+         0.25, 0.0,  0.3,
+         0.0,  0.12, 0.1,
+      ]);
+      const indices = [0, 1, 3, 0, 3, 2, 0, 1, 2, 1, 2, 3];
+      birdGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      birdGeo.setIndex(indices);
+      birdGeo.computeVertexNormals();
+
+      /* ── Instanced mesh ── */
+      const birdMat = new THREE.MeshBasicMaterial({
+        color: 0x110a18,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const flock = new THREE.InstancedMesh(birdGeo, birdMat, BOID_COUNT);
+      scene.add(flock);
+
+      /* ── Boid state ── */
+      const positions = [];
+      const velocities = [];
+      const dummy = new THREE.Object3D();
+      const tempVec = new THREE.Vector3();
+
+      for (let i = 0; i < BOID_COUNT; i++) {
+        positions.push(new THREE.Vector3(
+          (Math.random() - 0.5) * BOUNDS * 0.8,
+          (Math.random() - 0.5) * BOUNDS * 0.5,
+          (Math.random() - 0.5) * BOUNDS * 0.8
+        ));
+        const v = new THREE.Vector3(
+          (Math.random() - 0.5),
+          (Math.random() - 0.5) * 0.3,
+          (Math.random() - 0.5)
+        );
+        v.normalize().multiplyScalar(MIN_SPEED + Math.random() * (MAX_SPEED - MIN_SPEED));
+        velocities.push(v);
+      }
+
+      /* ── Spatial grid for neighbor lookup ── */
+      const CELL_SIZE = Math.max(SEPARATION_DIST, ALIGNMENT_DIST, COHESION_DIST);
+      const grid = new Map();
+
+      function cellKey(x, y, z) {
+        return `${Math.floor(x / CELL_SIZE)},${Math.floor(y / CELL_SIZE)},${Math.floor(z / CELL_SIZE)}`;
+      }
+
+      function buildGrid() {
+        grid.clear();
+        for (let i = 0; i < BOID_COUNT; i++) {
+          const key = cellKey(positions[i].x, positions[i].y, positions[i].z);
+          if (!grid.has(key)) grid.set(key, []);
+          grid.get(key).push(i);
+        }
+      }
+
+      function getNeighborCells(pos) {
+        const cx = Math.floor(pos.x / CELL_SIZE);
+        const cy = Math.floor(pos.y / CELL_SIZE);
+        const cz = Math.floor(pos.z / CELL_SIZE);
+        const neighbors = [];
+        for (let dx = -1; dx <= 1; dx++) {
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dz = -1; dz <= 1; dz++) {
+              const key = `${cx + dx},${cy + dy},${cz + dz}`;
+              const cell = grid.get(key);
+              if (cell) neighbors.push(cell);
+            }
+          }
+        }
+        return neighbors;
+      }
+
+      /* ── Boid update ── */
+      const separation = new THREE.Vector3();
+      const alignment = new THREE.Vector3();
+      const cohesion = new THREE.Vector3();
+      const steer = new THREE.Vector3();
+
+      function updateBoids() {
+        buildGrid();
+
+        for (let i = 0; i < BOID_COUNT; i++) {
+          const pos = positions[i];
+          const vel = velocities[i];
+
+          separation.set(0, 0, 0);
+          alignment.set(0, 0, 0);
+          cohesion.set(0, 0, 0);
+          let sepCount = 0, aliCount = 0, cohCount = 0;
+
+          const cells = getNeighborCells(pos);
+          for (let c = 0; c < cells.length; c++) {
+            const cell = cells[c];
+            for (let k = 0; k < cell.length; k++) {
+              const j = cell[k];
+              if (j === i) continue;
+
+              tempVec.subVectors(pos, positions[j]);
+              const dist = tempVec.length();
+
+              if (dist < SEPARATION_DIST && dist > 0) {
+                tempVec.normalize().divideScalar(dist);
+                separation.add(tempVec);
+                sepCount++;
+              }
+              if (dist < ALIGNMENT_DIST) {
+                alignment.add(velocities[j]);
+                aliCount++;
+              }
+              if (dist < COHESION_DIST) {
+                cohesion.add(positions[j]);
+                cohCount++;
+              }
+            }
+          }
+
+          steer.set(0, 0, 0);
+
+          if (sepCount > 0) {
+            separation.divideScalar(sepCount).normalize().multiplyScalar(SEPARATION_FORCE);
+            steer.add(separation);
+          }
+          if (aliCount > 0) {
+            alignment.divideScalar(aliCount).normalize().multiplyScalar(ALIGNMENT_FORCE);
+            steer.add(alignment);
+          }
+          if (cohCount > 0) {
+            cohesion.divideScalar(cohCount).sub(pos).normalize().multiplyScalar(COHESION_FORCE);
+            steer.add(cohesion);
+          }
+
+          /* Wander */
+          steer.x += (Math.random() - 0.5) * WANDER_FORCE;
+          steer.y += (Math.random() - 0.5) * WANDER_FORCE * 0.4;
+          steer.z += (Math.random() - 0.5) * WANDER_FORCE;
+
+          /* Soft boundary */
+          const halfBounds = BOUNDS * 0.5;
+          if (pos.x > halfBounds) steer.x -= BOUNDARY_FORCE * ((pos.x - halfBounds) / halfBounds);
+          if (pos.x < -halfBounds) steer.x += BOUNDARY_FORCE * ((-halfBounds - pos.x) / halfBounds);
+          if (pos.y > halfBounds * 0.6) steer.y -= BOUNDARY_FORCE * ((pos.y - halfBounds * 0.6) / halfBounds);
+          if (pos.y < -halfBounds * 0.4) steer.y += BOUNDARY_FORCE * ((-halfBounds * 0.4 - pos.y) / halfBounds);
+          if (pos.z > halfBounds) steer.z -= BOUNDARY_FORCE * ((pos.z - halfBounds) / halfBounds);
+          if (pos.z < -halfBounds) steer.z += BOUNDARY_FORCE * ((-halfBounds - pos.z) / halfBounds);
+
+          vel.add(steer);
+          const speed = vel.length();
+          if (speed > MAX_SPEED) vel.multiplyScalar(MAX_SPEED / speed);
+          if (speed < MIN_SPEED) vel.multiplyScalar(MIN_SPEED / speed);
+
+          pos.add(vel);
+
+          /* Update instance matrix */
+          dummy.position.copy(pos);
+          dummy.lookAt(tempVec.addVectors(pos, vel));
+          dummy.updateMatrix();
+          flock.setMatrixAt(i, dummy.matrix);
+        }
+
+        flock.instanceMatrix.needsUpdate = true;
+      }
+
+      /* ── Camera orbit ── */
+      let camAngle = 0;
+      const camRadius = 58;
+      const camHeight = 6;
+
+      function updateCamera(time) {
+        camAngle += 0.0006;
+        const wobbleY = Math.sin(time * 0.00015) * 4;
+        const wobbleR = Math.sin(time * 0.0001) * 8;
+        camera.position.x = Math.cos(camAngle) * (camRadius + wobbleR);
+        camera.position.z = Math.sin(camAngle) * (camRadius + wobbleR);
+        camera.position.y = camHeight + wobbleY;
+        camera.lookAt(0, 0, 0);
+      }
+
+      /* ── Animation loop ── */
+      function animate(time) {
+        requestAnimationFrame(animate);
+        updateBoids();
+        updateCamera(time);
+        renderer.render(scene, camera);
+      }
+
+      animate(0);
+
+      /* ── Resize ── */
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    })();
+  </script>
 </body>
-
 </html>
