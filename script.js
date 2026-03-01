@@ -9,12 +9,12 @@ const MAX_BIRDS = 15000;
 
 const state = {
     boids: {
-        count: 5000,
-        speed: 0.6,
-        cohesion: 0.7,
-        alignment: 4.0,
-        separation: 1.2,
-        perceptionRadius: 8.0,
+        count: 7500,
+        speed: 0.5,
+        cohesion: 1.0,
+        alignment: 2.1,
+        separation: 0.4,
+        perceptionRadius: 4.0,
     },
     environment: {
         sunElevation: 2,
