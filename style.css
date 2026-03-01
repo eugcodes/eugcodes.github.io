@@ -21,37 +21,6 @@ body {
     z-index: 0;
 }
 
-/* ── Title ────────────────────────────────────── */
-
-.title {
-    position: fixed;
-    top: 36px;
-    left: 40px;
-    z-index: 10;
-    pointer-events: none;
-    user-select: none;
-}
-
-.title h1 {
-    font-family: 'Cormorant Garamond', Georgia, serif;
-    font-weight: 300;
-    font-size: 52px;
-    letter-spacing: 2px;
-    line-height: 1;
-    color: rgba(255, 255, 255, 0.92);
-    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
-}
-
-.title .subtitle {
-    font-family: 'Inter', sans-serif;
-    font-weight: 400;
-    font-size: 11px;
-    letter-spacing: 3.5px;
-    margin-top: 8px;
-    color: rgba(255, 255, 255, 0.55);
-    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.3);
-}
-
 /* ── Control Buttons ──────────────────────────── */
 
 .controls {
@@ -225,6 +194,14 @@ body {
     text-align: right;
 }
 
+.setting-desc {
+    font-size: 10px;
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.3);
+    line-height: 1.45;
+    margin-bottom: 7px;
+}
+
 /* ── Range Slider ─────────────────────────────── */
 
 input[type="range"] {
@@ -274,20 +251,6 @@ input[type="range"]::-moz-range-track {
 /* ── Responsive ───────────────────────────────── */
 
 @media (max-width: 768px) {
-    .title {
-        top: 24px;
-        left: 24px;
-    }
-
-    .title h1 {
-        font-size: 36px;
-    }
-
-    .title .subtitle {
-        font-size: 9px;
-        letter-spacing: 2.5px;
-    }
-
     .controls {
         top: 24px;
         right: 24px;
@@ -306,10 +269,6 @@ input[type="range"]::-moz-range-track {
 }
 
 @media (max-width: 480px) {
-    .title h1 {
-        font-size: 28px;
-    }
-
     .settings-panel {
         width: 100%;
         right: -100%;
