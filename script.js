@@ -709,7 +709,7 @@ function init() {
     // sun so it appears 1/5 of the viewport width from the left.
     if (window.innerWidth < window.innerHeight && window.innerWidth <= 768) {
         const aspect = window.innerWidth / window.innerHeight;
-        const halfVFov = THREE.MathUtils.degToRad(camera.fov / 2);
+        const halfVFov = THREE.MathUtils.degToRad(55 / 2);
         const halfHFov = Math.atan(Math.tan(halfVFov) * aspect);
         // 1/5 from left in NDC is x = -0.6 (left = -1, right = 1)
         const angle = Math.atan(0.6 * Math.tan(halfHFov));
