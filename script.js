@@ -165,7 +165,7 @@ function initRenderer() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.5;
+    renderer.toneMappingExposure = 1.0;
 
     scene = new THREE.Scene();
 
@@ -175,7 +175,8 @@ function initRenderer() {
         1,
         5000
     );
-    camera.position.set(0, 60, 150);
+    // Position set properly by updateCameraFromState() after init
+    camera.position.set(0, 55, 145);
     camera.lookAt(0, 80, 0);
 
     clock = new THREE.Clock();
@@ -475,7 +476,7 @@ const cameraState = {
     lastY: 0,
     // Spherical coordinates relative to lookAt target
     theta: 0,     // horizontal angle
-    phi: Math.PI / 2 - 0.27, // vertical angle (slightly above horizon)
+    phi: Math.PI / 2 + 0.17, // slightly below flock, looking up (as in real life)
     radius: 150,
     targetX: BOUNDS_CENTER[0],
     targetY: BOUNDS_CENTER[1],
