@@ -129,13 +129,6 @@ const attractors = [
     { x: 0, y: 80, z: 0, tx: 0, ty: 80, tz: 0, nextChange: 6 },
 ];
 
-// Mouse interaction
-const mouse = { x: 0, y: 0, worldX: 0, worldY: 80, worldZ: 0, active: false };
-const raycaster = new THREE.Raycaster();
-const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-const mouseNDC = new THREE.Vector2();
-const mouseWorld = new THREE.Vector3();
-
 // ════════════════════════════════════════════════════════════
 // Bird Geometry
 // ════════════════════════════════════════════════════════════
@@ -168,7 +161,6 @@ function initRenderer() {
     renderer = new THREE.WebGLRenderer({
         canvas,
         antialias: true,
-        preserveDrawingBuffer: true,
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -183,7 +175,7 @@ function initRenderer() {
         1,
         5000
     );
-    camera.position.set(0, 40, 220);
+    camera.position.set(0, 60, 150);
     camera.lookAt(0, 80, 0);
 
     clock = new THREE.Clock();
@@ -408,19 +400,16 @@ function simulateBoids(dt) {
             az -= (bcz / bdist) * strength;
         }
 
-        // Mouse interaction
-        if (mouse.active) {
-            const mdx = px - mouse.worldX;
-            const mdy = py - mouse.worldY;
-            const mdz = pz - mouse.worldZ;
-            const mdist = Math.sqrt(mdx * mdx + mdy * mdy + mdz * mdz) + 0.1;
-            if (mdist < 30) {
-                const mstrength = (1 - mdist / 30) * 0.8;
-                ax += (mdx / mdist) * mstrength;
-                ay += (mdy / mdist) * mstrength;
-                az += (mdz / mdist) * mstrength;
-            }
-        }
+        // Angular momentum damping — prevents stable circular orbits
+        // by applying a gentle counter-torque to each bird's tangential
+        // velocity relative to the flock centre in the XZ plane.
+        const rx = px - BOUNDS_CENTER[0];
+        const rz = pz - BOUNDS_CENTER[2];
+        const rDist = Math.sqrt(rx * rx + rz * rz) + 0.01;
+        const tangVel = (-rz * velX[i] + rx * velZ[i]) / rDist;
+        const dampStr = 0.004;
+        ax += (rz / rDist) * tangVel * dampStr;
+        az -= (rx / rDist) * tangVel * dampStr;
 
         // Small noise for organic feel
         ax += (Math.random() - 0.5) * 0.02;
@@ -477,112 +466,91 @@ function updateBirdMesh() {
 }
 
 // ════════════════════════════════════════════════════════════
-// Audio System
+// Camera Controls (zoom, pan)
 // ════════════════════════════════════════════════════════════
 
-const audio = {
-    ctx: null,
-    gain: null,
-    enabled: false,
-
-    init() {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-
-        // Brown noise for wind
-        const bufferSize = this.ctx.sampleRate * 4;
-        const buffer = this.ctx.createBuffer(2, bufferSize, this.ctx.sampleRate);
-
-        for (let ch = 0; ch < 2; ch++) {
-            const data = buffer.getChannelData(ch);
-            let last = 0;
-            for (let i = 0; i < bufferSize; i++) {
-                const white = Math.random() * 2 - 1;
-                data[i] = (last + 0.02 * white) / 1.02;
-                last = data[i];
-                data[i] *= 3.5;
-            }
-        }
-
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 250;
-        filter.Q.value = 0.3;
-
-        // Subtle modulation
-        const lfo = this.ctx.createOscillator();
-        const lfoGain = this.ctx.createGain();
-        lfo.frequency.value = 0.15;
-        lfoGain.gain.value = 80;
-        lfo.connect(lfoGain);
-        lfoGain.connect(filter.frequency);
-        lfo.start();
-
-        this.gain = this.ctx.createGain();
-        this.gain.gain.value = 0;
-
-        source.connect(filter);
-        filter.connect(this.gain);
-        this.gain.connect(this.ctx.destination);
-        source.start();
-    },
-
-    toggle() {
-        if (!this.ctx) this.init();
-        this.enabled = !this.enabled;
-        this.gain.gain.linearRampToValueAtTime(
-            this.enabled ? 0.25 : 0,
-            this.ctx.currentTime + 0.8
-        );
-        if (this.ctx.state === 'suspended') this.ctx.resume();
-    },
+const cameraState = {
+    isDragging: false,
+    lastX: 0,
+    lastY: 0,
+    // Spherical coordinates relative to lookAt target
+    theta: 0,     // horizontal angle
+    phi: Math.PI / 2 - 0.27, // vertical angle (slightly above horizon)
+    radius: 150,
+    targetX: BOUNDS_CENTER[0],
+    targetY: BOUNDS_CENTER[1],
+    targetZ: BOUNDS_CENTER[2],
 };
 
-// ════════════════════════════════════════════════════════════
-// Mouse / Touch Interaction
-// ════════════════════════════════════════════════════════════
-
-function updateMouseWorld() {
-    raycaster.setFromCamera(mouseNDC, camera);
-    // Intersect with plane at flock center
-    mousePlane.normal.copy(camera.getWorldDirection(new THREE.Vector3()));
-    mousePlane.constant = -mousePlane.normal.dot(
-        new THREE.Vector3(BOUNDS_CENTER[0], BOUNDS_CENTER[1], BOUNDS_CENTER[2])
-    );
-    raycaster.ray.intersectPlane(mousePlane, mouseWorld);
-    if (mouseWorld) {
-        mouse.worldX = mouseWorld.x;
-        mouse.worldY = mouseWorld.y;
-        mouse.worldZ = mouseWorld.z;
-    }
+function updateCameraFromState() {
+    const s = cameraState;
+    camera.position.x = s.targetX + s.radius * Math.sin(s.phi) * Math.sin(s.theta);
+    camera.position.y = s.targetY + s.radius * Math.cos(s.phi);
+    camera.position.z = s.targetZ + s.radius * Math.sin(s.phi) * Math.cos(s.theta);
+    camera.lookAt(s.targetX, s.targetY, s.targetZ);
 }
 
-function onMouseMove(e) {
-    mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    mouse.active = true;
-    updateMouseWorld();
-}
+function setupCameraControls() {
+    const canvas = renderer.domElement;
 
-function onMouseLeave() {
-    mouse.active = false;
-}
+    // Mouse drag to orbit
+    canvas.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.settings-panel, .settings-btn')) return;
+        cameraState.isDragging = true;
+        cameraState.lastX = e.clientX;
+        cameraState.lastY = e.clientY;
+        canvas.setPointerCapture(e.pointerId);
+    });
 
-function onTouchMove(e) {
-    if (e.touches.length > 0) {
-        const t = e.touches[0];
-        mouseNDC.x = (t.clientX / window.innerWidth) * 2 - 1;
-        mouseNDC.y = -(t.clientY / window.innerHeight) * 2 + 1;
-        mouse.active = true;
-        updateMouseWorld();
-    }
-}
+    canvas.addEventListener('pointermove', (e) => {
+        if (!cameraState.isDragging) return;
+        const dx = e.clientX - cameraState.lastX;
+        const dy = e.clientY - cameraState.lastY;
+        cameraState.lastX = e.clientX;
+        cameraState.lastY = e.clientY;
 
-function onTouchEnd() {
-    mouse.active = false;
+        cameraState.theta -= dx * 0.004;
+        cameraState.phi = Math.max(0.2, Math.min(Math.PI - 0.2, cameraState.phi + dy * 0.004));
+        updateCameraFromState();
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+        cameraState.isDragging = false;
+        canvas.releasePointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointercancel', (e) => {
+        cameraState.isDragging = false;
+    });
+
+    // Scroll wheel to zoom
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        cameraState.radius = Math.max(40, Math.min(400, cameraState.radius + e.deltaY * 0.15));
+        updateCameraFromState();
+    }, { passive: false });
+
+    // Pinch to zoom (touch)
+    let lastPinchDist = 0;
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+        }
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const delta = lastPinchDist - dist;
+            cameraState.radius = Math.max(40, Math.min(400, cameraState.radius + delta * 0.5));
+            lastPinchDist = dist;
+            updateCameraFromState();
+        }
+    }, { passive: true });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -652,10 +620,7 @@ function setupUI() {
     const panel = document.getElementById('settings-panel');
     const btnSettings = document.getElementById('btn-settings');
     const btnClose = document.getElementById('btn-close-settings');
-    const btnScreenshot = document.getElementById('btn-screenshot');
-    const btnAudio = document.getElementById('btn-audio');
 
-    // Settings toggle
     btnSettings.addEventListener('click', () => {
         panel.classList.toggle('open');
         btnSettings.classList.toggle('active');
@@ -665,7 +630,6 @@ function setupUI() {
         btnSettings.classList.remove('active');
     });
 
-    // Tabs
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach((tab) => {
         tab.addEventListener('click', () => {
@@ -676,31 +640,6 @@ function setupUI() {
         });
     });
 
-    // Screenshot
-    btnScreenshot.addEventListener('click', () => {
-        renderer.render(scene, camera);
-        const dataURL = renderer.domElement.toDataURL('image/png');
-        const link = document.createElement('a');
-        link.download = 'starlings.png';
-        link.href = dataURL;
-        link.click();
-    });
-
-    // Audio
-    btnAudio.addEventListener('click', () => {
-        audio.toggle();
-        btnAudio.querySelector('.audio-off').classList.toggle('hidden', audio.enabled);
-        btnAudio.querySelector('.audio-on').classList.toggle('hidden', !audio.enabled);
-        btnAudio.classList.toggle('active', audio.enabled);
-    });
-
-    // Mouse / Touch
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseleave', onMouseLeave);
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchend', onTouchEnd);
-
-    // Resize
     window.addEventListener('resize', onResize);
 }
 
@@ -740,6 +679,8 @@ function init() {
     initSky();
     initBirds();
     initializeBoids();
+    setupCameraControls();
+    updateCameraFromState();
     setupUI();
     animate();
 }
