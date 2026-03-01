@@ -533,7 +533,7 @@ function setupCameraControls() {
         cameraState.lastX = e.clientX;
         cameraState.lastY = e.clientY;
 
-        cameraState.theta -= dx * 0.004;
+        cameraState.theta += dx * 0.004;
         cameraState.phi = Math.max(0.2, Math.min(Math.PI - 0.2, cameraState.phi + dy * 0.004));
         updateCameraFromState();
     });
