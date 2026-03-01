@@ -50,34 +50,47 @@
       /*
        * Fish Schooling Simulation
        *
-       * Based on Reynolds' boids model, tuned for fish schooling behavior:
-       *  - ~300° visual field (60° blind spot behind each fish)
-       *  - Strong alignment (polarization) — dominant force in fish schools
-       *  - Nearest-neighbor distance ~1–2 body lengths
-       *  - Slightly flattened vertical distribution (schools are semi-planar)
-       *  - Emergent torus/mill and coordinated turning behaviors
+       * Based on Reynolds' boids model, parameterized from empirical fish
+       * schooling research (Herbert-Read et al., Couzin et al.):
+       *
+       *  - ~310° visual field (~50° rear blind spot)
+       *  - Separation highest priority (hard repulsion at <1 BL)
+       *  - Cohesion > Alignment (polarization emerges from geometry
+       *    of attraction/repulsion, not explicit heading-copying)
+       *  - Semi-planar "ladder formation" — vertical stagger of 1–2 BL
+       *  - Oblong/ellipsoidal school shape elongated along travel direction
+       *  - Speed regulation as primary interaction mechanism
        */
 
       /* ── Configuration ── */
       const FISH_COUNT = 500;
       const BOUNDS = 40;
-      const MAX_SPEED = 0.32;
-      const MIN_SPEED = 0.12;
+      const MAX_SPEED = 0.35;
+      const MIN_SPEED = 0.10;
+      const CRUISE_SPEED = 0.22;
 
-      /* Neighbor radii */
-      const SEPARATION_DIST = 1.8;   /* ~1 body length — avoid collisions */
-      const ALIGNMENT_DIST = 7.0;    /* broader alignment sensing */
-      const COHESION_DIST = 9.0;     /* school-level attraction */
+      /* Neighbor radii (in body-length units, 1 BL ≈ 1.8 scene units) */
+      const SEPARATION_DIST = 1.6;   /* 0.5–1.0 BL — hard repulsion zone */
+      const ALIGNMENT_DIST = 4.5;    /* 1.0–3.0 BL — medium range */
+      const COHESION_DIST = 7.2;     /* 2.0–4.0 BL — longest range */
 
-      /* Force weights — alignment dominant for fish */
-      const SEPARATION_FORCE = 0.05;
-      const ALIGNMENT_FORCE = 0.055;
-      const COHESION_FORCE = 0.02;
-      const WANDER_FORCE = 0.004;
+      /*
+       * Force weights — research-backed hierarchy for fish:
+       * Separation (1.0) >> Cohesion (0.5–0.8) > Alignment (0.3–0.6)
+       * Alignment is weak because polarization emerges from
+       * the interplay of attraction and repulsion geometry.
+       */
+      const SEPARATION_FORCE = 0.06;
+      const ALIGNMENT_FORCE = 0.025;
+      const COHESION_FORCE = 0.04;
+      const WANDER_FORCE = 0.003;
       const BOUNDARY_FORCE = 0.05;
 
-      /* Visual field: fish see ~300°, blind spot directly behind (~60°) */
-      const BLIND_SPOT_COS = Math.cos(Math.PI * (300 / 360)); /* cos(150°) ≈ -0.866 */
+      /* Speed regulation — fish slow down near neighbors, speed up to rejoin */
+      const SPEED_REGULATION = 0.015;
+
+      /* Visual field: fish see ~310°, blind spot directly behind (~50°) */
+      const BLIND_SPOT_COS = Math.cos(Math.PI * (310 / 360)); /* cos(155°) ≈ -0.906 */
 
       /* ── Scene ── */
       const scene = new THREE.Scene();
@@ -379,6 +392,7 @@
         for (let i = 0; i < FISH_COUNT; i++) {
           const pos = positions[i];
           const vel = velocities[i];
+          const currentSpeed = vel.length();
 
           /* Fish's forward direction for visual field check */
           forwardVec.copy(vel).normalize();
@@ -387,6 +401,9 @@
           alignment.set(0, 0, 0);
           cohesion.set(0, 0, 0);
           let sepCount = 0, aliCount = 0, cohCount = 0;
+          let nearestDist = Infinity;
+          let neighborAvgSpeed = 0;
+          let speedNeighborCount = 0;
 
           const cells = getNeighborCells(pos);
           for (let c = 0; c < cells.length; c++) {
@@ -399,12 +416,16 @@
               const dist = toNeighbor.length();
               if (dist === 0) continue;
 
-              /* Visual field check: ~300° field of view */
+              /* Visual field check: ~310° field of view */
               const dotProduct = forwardVec.dot(toNeighbor.normalize());
               if (dotProduct < BLIND_SPOT_COS) continue; /* in blind spot */
 
+              if (dist < nearestDist) nearestDist = dist;
+
               if (dist < SEPARATION_DIST) {
-                tempVec.subVectors(pos, positions[j]).normalize().divideScalar(dist);
+                /* Inverse-square repulsion — stronger the closer they get */
+                const strength = (SEPARATION_DIST - dist) / SEPARATION_DIST;
+                tempVec.subVectors(pos, positions[j]).normalize().multiplyScalar(strength * strength);
                 separation.add(tempVec);
                 sepCount++;
               }
@@ -415,6 +436,8 @@
               if (dist < COHESION_DIST) {
                 cohesion.add(positions[j]);
                 cohCount++;
+                neighborAvgSpeed += velocities[j].length();
+                speedNeighborCount++;
               }
             }
           }
@@ -434,17 +457,35 @@
             steer.add(cohesion);
           }
 
-          /* Gentle wander — lower Y component for semi-planar schooling */
+          /*
+           * Speed regulation — primary interaction mechanism in fish.
+           * Fish slow down to avoid collisions, speed up to rejoin school.
+           * This propagates information through the school via speed changes.
+           */
+          if (speedNeighborCount > 0) {
+            neighborAvgSpeed /= speedNeighborCount;
+            const speedDiff = neighborAvgSpeed - currentSpeed;
+            const speedAdjust = forwardVec.clone().multiplyScalar(speedDiff * SPEED_REGULATION);
+            steer.add(speedAdjust);
+          }
+
+          /* Gentle wander — minimal Y for ladder-formation tendency */
           steer.x += (Math.random() - 0.5) * WANDER_FORCE;
-          steer.y += (Math.random() - 0.5) * WANDER_FORCE * 0.25;
+          steer.y += (Math.random() - 0.5) * WANDER_FORCE * 0.2;
           steer.z += (Math.random() - 0.5) * WANDER_FORCE;
 
-          /* Depth preference — fish tend to stay in a band */
-          steer.y -= pos.y * 0.0008;
+          /* Depth centering — fish stay in a band but allow vertical stagger */
+          steer.y -= pos.y * 0.001;
+
+          /* Cruise speed attraction — drift toward cruise speed when alone */
+          if (speedNeighborCount === 0) {
+            const cruiseDiff = CRUISE_SPEED - currentSpeed;
+            steer.add(forwardVec.clone().multiplyScalar(cruiseDiff * 0.01));
+          }
 
           /* Soft boundaries */
           const halfBounds = BOUNDS * 0.5;
-          const vHalf = halfBounds * 0.4; /* tighter vertical bounds */
+          const vHalf = halfBounds * 0.45; /* vertical bounds allow ladder stagger */
           if (pos.x > halfBounds) steer.x -= BOUNDARY_FORCE * ((pos.x - halfBounds) / halfBounds);
           if (pos.x < -halfBounds) steer.x += BOUNDARY_FORCE * ((-halfBounds - pos.x) / halfBounds);
           if (pos.y > vHalf) steer.y -= BOUNDARY_FORCE * 1.5 * ((pos.y - vHalf) / vHalf);
@@ -454,8 +495,8 @@
 
           vel.add(steer);
 
-          /* Dampen vertical velocity for planar schooling */
-          vel.y *= 0.97;
+          /* Dampen vertical velocity — semi-planar schooling with ladder stagger */
+          vel.y *= 0.96;
 
           const speed = vel.length();
           if (speed > MAX_SPEED) vel.multiplyScalar(MAX_SPEED / speed);
@@ -467,8 +508,6 @@
           dummy.position.copy(pos);
           tempVec.addVectors(pos, vel);
           dummy.lookAt(tempVec);
-          const scale = 0.85 + Math.random() * 0.001; /* tiny jitter for organic feel */
-          dummy.scale.set(scale, scale, scale);
           dummy.updateMatrix();
           school.setMatrixAt(i, dummy.matrix);
         }
