@@ -14,12 +14,12 @@ const MAX_BIRDS = 15000;
 
 const state = {
     boids: {
-        count: 10000,
-        speed: 1.5,
-        cohesion: 0.5,
-        alignment: 2.0,
-        separation: 0.8,
-        perceptionRadius: 5.0,
+        count: 5000,
+        speed: 0.6,
+        cohesion: 0.9,
+        alignment: 3.5,
+        separation: 1.2,
+        perceptionRadius: 6.5,
     },
     environment: {
         sunElevation: 2,
@@ -43,30 +43,30 @@ const state = {
 
 const settingsConfig = {
     boids: [
-        { key: 'count', label: 'Bird Count', min: 100, max: 15000, step: 100 },
-        { key: 'speed', label: 'Flight Speed', min: 0.1, max: 5, step: 0.1 },
-        { key: 'cohesion', label: 'Cohesion', min: 0, max: 3, step: 0.1 },
-        { key: 'alignment', label: 'Alignment', min: 0, max: 5, step: 0.1 },
-        { key: 'separation', label: 'Separation', min: 0, max: 3, step: 0.1 },
-        { key: 'perceptionRadius', label: 'Perception Radius', min: 1, max: 15, step: 0.5 },
+        { key: 'count', label: 'Bird Count', min: 100, max: 15000, step: 100, desc: 'Number of birds in the flock. Real starling murmurations range from hundreds to over a million.' },
+        { key: 'speed', label: 'Flight Speed', min: 0.1, max: 5, step: 0.1, desc: 'Base cruising speed of each bird. Lower values produce calmer, more meditative flocking.' },
+        { key: 'cohesion', label: 'Cohesion', min: 0, max: 3, step: 0.1, desc: 'How strongly birds steer toward the centre of nearby neighbours. Higher values create tighter clusters.' },
+        { key: 'alignment', label: 'Alignment', min: 0, max: 5, step: 0.1, desc: 'How strongly birds match the direction of their neighbours. This is the dominant force in real starling flocks.' },
+        { key: 'separation', label: 'Separation', min: 0, max: 3, step: 0.1, desc: 'How strongly birds avoid crowding nearby neighbours. Prevents collisions and maintains personal space.' },
+        { key: 'perceptionRadius', label: 'Perception Radius', min: 1, max: 15, step: 0.5, desc: 'How far each bird can see. Real starlings interact with their nearest 6\u20137 neighbours regardless of distance.' },
     ],
     environment: [
-        { key: 'sunElevation', label: 'Sun Elevation', min: 0, max: 90, step: 1 },
-        { key: 'sunAzimuth', label: 'Sun Azimuth', min: 0, max: 360, step: 1 },
-        { key: 'turbidity', label: 'Sky Turbidity', min: 1, max: 20, step: 0.1 },
-        { key: 'rayleigh', label: 'Sky Rayleigh', min: 0, max: 4, step: 0.1 },
-        { key: 'mieCoefficient', label: 'Mie Coefficient', min: 0, max: 0.1, step: 0.001 },
-        { key: 'mieDirectionalG', label: 'Mie Directional G', min: 0, max: 0.999, step: 0.01 },
-        { key: 'ambientLight', label: 'Ambient Light', min: 0, max: 5, step: 0.1 },
-        { key: 'directionalLight', label: 'Directional Light', min: 0, max: 5, step: 0.1 },
+        { key: 'sunElevation', label: 'Sun Elevation', min: 0, max: 90, step: 1, desc: 'Angle of the sun above the horizon in degrees. Low values produce sunset/sunrise colours.' },
+        { key: 'sunAzimuth', label: 'Sun Azimuth', min: 0, max: 360, step: 1, desc: 'Compass direction of the sun. 0\u00b0 is north, 90\u00b0 east, 180\u00b0 south, 270\u00b0 west.' },
+        { key: 'turbidity', label: 'Sky Turbidity', min: 1, max: 20, step: 0.1, desc: 'Atmospheric haziness. Low values give a clear blue sky; high values simulate dust, humidity, or smog.' },
+        { key: 'rayleigh', label: 'Sky Rayleigh', min: 0, max: 4, step: 0.1, desc: 'Rayleigh scattering coefficient. Controls the blue tint of the sky; higher values intensify the blue.' },
+        { key: 'mieCoefficient', label: 'Mie Coefficient', min: 0, max: 0.1, step: 0.001, desc: 'Mie scattering amount. Controls the hazy glow around the sun from atmospheric particles.' },
+        { key: 'mieDirectionalG', label: 'Mie Directional G', min: 0, max: 0.999, step: 0.01, desc: 'Mie scattering directionality. Higher values concentrate the sun halo into a tighter, brighter disc.' },
+        { key: 'ambientLight', label: 'Ambient Light', min: 0, max: 5, step: 0.1, desc: 'Base light that illuminates all birds equally, simulating light scattered by the sky.' },
+        { key: 'directionalLight', label: 'Directional Light', min: 0, max: 5, step: 0.1, desc: 'Intensity of sunlight casting on the birds. Creates highlights and shadows based on sun position.' },
     ],
     effects: [
-        { key: 'bloomIntensity', label: 'Bloom Intensity', min: 0, max: 2, step: 0.05 },
-        { key: 'bloomThreshold', label: 'Bloom Threshold', min: 0, max: 1, step: 0.05 },
-        { key: 'bloomRadius', label: 'Bloom Radius', min: 0, max: 1, step: 0.05 },
-        { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05 },
-        { key: 'exposure', label: 'Exposure', min: 0.1, max: 3, step: 0.1 },
-        { key: 'filmGrain', label: 'Film Grain', min: 0, max: 0.5, step: 0.01 },
+        { key: 'bloomIntensity', label: 'Bloom Intensity', min: 0, max: 2, step: 0.05, desc: 'Strength of the glow effect on bright areas. Simulates light bleeding in a camera lens.' },
+        { key: 'bloomThreshold', label: 'Bloom Threshold', min: 0, max: 1, step: 0.05, desc: 'Brightness level above which bloom is applied. Lower values make more of the scene glow.' },
+        { key: 'bloomRadius', label: 'Bloom Radius', min: 0, max: 1, step: 0.05, desc: 'How far the bloom glow spreads from bright areas.' },
+        { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05, desc: 'Darkening around the edges of the frame, drawing the eye toward the centre.' },
+        { key: 'exposure', label: 'Exposure', min: 0.1, max: 3, step: 0.1, desc: 'Overall brightness of the scene. Simulates camera exposure adjustment.' },
+        { key: 'filmGrain', label: 'Film Grain', min: 0, max: 0.5, step: 0.01, desc: 'Adds subtle noise to the image, giving an analog film aesthetic.' },
     ],
 };
 
@@ -579,12 +579,14 @@ function updateBirdMesh() {
 
 function updateCamera(dt) {
     cameraTime += dt;
-    const orbitSpeed = 0.025;
+    const swaySpeed = 0.025;
+    const swayAmplitude = 0.4; // ~23 degrees each way
     const orbitRadius = 220;
     const bobAmount = 4;
     const bobSpeed = 0.2;
 
-    const angle = cameraTime * orbitSpeed;
+    // Sway back and forth instead of continuous orbit so the sun stays in view
+    const angle = Math.sin(cameraTime * swaySpeed) * swayAmplitude;
     camera.position.x = Math.sin(angle) * orbitRadius;
     camera.position.z = Math.cos(angle) * orbitRadius;
     camera.position.y = 40 + Math.sin(cameraTime * bobSpeed) * bobAmount;
@@ -717,6 +719,7 @@ function buildSettingsUI() {
                     <span class="setting-label">${s.label}</span>
                     <span class="setting-value" id="val-${category}-${s.key}">${formatValue(val, s)}</span>
                 </div>
+                ${s.desc ? `<p class="setting-desc">${s.desc}</p>` : ''}
                 <input type="range"
                     id="slider-${category}-${s.key}"
                     min="${s.min}" max="${s.max}" step="${s.step}"
@@ -804,7 +807,7 @@ function setupUI() {
         composer.render();
         const dataURL = renderer.domElement.toDataURL('image/png');
         const link = document.createElement('a');
-        link.download = 'murmuration.png';
+        link.download = 'starlings.png';
         link.href = dataURL;
         link.click();
     });
