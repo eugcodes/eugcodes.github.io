@@ -18,7 +18,7 @@ const state = {
     },
     environment: {
         sunElevation: 2,
-        sunAzimuth: 180,
+        sunAzimuth: 197,
         turbidity: 5.2,
         rayleigh: 2.2,
         mieCoefficient: 0,

@@ -41,18 +41,17 @@ body {
 .contact-email {
     font-size: 13px;
     font-weight: 300;
-    color: rgba(255, 255, 255, 0.6);
+    color: #000;
     text-decoration: none;
     letter-spacing: 0.3px;
-    transition: color 0.2s ease;
 }
 
 .contact-email:visited {
-    color: rgba(255, 255, 255, 0.6);
+    color: #000;
 }
 
 .contact-email:hover {
-    color: rgba(255, 255, 255, 0.9);
+    color: #000;
 }
 
 .contact-linkedin {
