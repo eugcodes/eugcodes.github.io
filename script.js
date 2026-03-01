@@ -11,10 +11,10 @@ const state = {
     boids: {
         count: 5000,
         speed: 0.6,
-        cohesion: 0.9,
-        alignment: 3.5,
+        cohesion: 0.7,
+        alignment: 4.0,
         separation: 1.2,
-        perceptionRadius: 6.5,
+        perceptionRadius: 8.0,
     },
     environment: {
         sunElevation: 2,
@@ -33,7 +33,7 @@ const settingsConfig = {
         { key: 'cohesion', label: 'Cohesion', min: 0, max: 3, step: 0.1, desc: 'How strongly birds steer toward the centre of nearby neighbours. Higher values create tighter clusters.' },
         { key: 'alignment', label: 'Alignment', min: 0, max: 5, step: 0.1, desc: 'How strongly birds match the direction of their neighbours. This is the dominant force in real starling flocks.' },
         { key: 'separation', label: 'Separation', min: 0, max: 3, step: 0.1, desc: 'How strongly birds avoid crowding nearby neighbours. Prevents collisions and maintains personal space.' },
-        { key: 'perceptionRadius', label: 'Perception Radius', min: 1, max: 15, step: 0.5, desc: 'How far each bird can see. Real starlings interact with their nearest 6\u20137 neighbours regardless of distance.' },
+        { key: 'perceptionRadius', label: 'Perception Radius', min: 1, max: 15, step: 0.5, desc: 'Maximum visual range. Within this range each bird locks on to its 7 nearest neighbours — the topological interaction observed in real starling flocks (Ballerini et al. 2008).' },
     ],
     environment: [
         { key: 'sunElevation', label: 'Sun Elevation', min: 0, max: 90, step: 1, desc: 'Angle of the sun above the horizon in degrees. Low values produce sunset/sunrise colours.' },
@@ -165,7 +165,7 @@ function initRenderer() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.5;
+    renderer.toneMappingExposure = 1.0;
 
     scene = new THREE.Scene();
 
@@ -175,7 +175,8 @@ function initRenderer() {
         1,
         5000
     );
-    camera.position.set(0, 60, 150);
+    // Position set properly by updateCameraFromState() after init
+    camera.position.set(0, 55, 145);
     camera.lookAt(0, 80, 0);
 
     clock = new THREE.Clock();
@@ -245,6 +246,10 @@ function initBirds() {
 
 const BOUNDS_CENTER = [0, 80, 0];
 const BOUNDS_RADIUS = 70;
+const K_NEIGHBORS = 7; // Topological interaction (Ballerini et al. 2008)
+// Pre-allocated scratch arrays for K-nearest search
+const _kDist = new Float32Array(K_NEIGHBORS);
+const _kIdx = new Int32Array(K_NEIGHBORS);
 
 function initializeBoids(startIdx = 0) {
     const count = state.boids.count;
@@ -276,11 +281,11 @@ function updateAttractors(t) {
             attr.tx = BOUNDS_CENTER[0] + (Math.random() - 0.5) * 2 * r;
             attr.ty = BOUNDS_CENTER[1] + (Math.random() - 0.5) * r;
             attr.tz = BOUNDS_CENTER[2] + (Math.random() - 0.5) * 2 * r;
-            // Next change in 3-10 seconds (irregular timing)
-            attr.nextChange = t + 3 + Math.random() * 7;
+            // Next change in 2-6 seconds (irregular timing)
+            attr.nextChange = t + 2 + Math.random() * 4;
         }
-        // Move toward target at varying rates
-        const lerp = 0.015;
+        // Move toward target
+        const lerp = 0.025;
         attr.x += (attr.tx - attr.x) * lerp;
         attr.y += (attr.ty - attr.y) * lerp;
         attr.z += (attr.tz - attr.z) * lerp;
@@ -291,7 +296,7 @@ function simulateBoids(dt) {
     const count = state.boids.count;
     const { speed, cohesion, alignment, separation, perceptionRadius } = state.boids;
     const percRadSq = perceptionRadius * perceptionRadius;
-    const sepDist = perceptionRadius * 0.4;
+    const sepDist = perceptionRadius * 0.35;
     const sepDistSq = sepDist * sepDist;
     const maxSpeed = speed * 1.8;
     const minSpeed = speed * 0.4;
@@ -303,22 +308,16 @@ function simulateBoids(dt) {
         grid.insert(i, posX[i], posY[i], posZ[i]);
     }
 
-    // Temp accumulators
-    let sepX, sepY, sepZ, sepCount;
-    let aliX, aliY, aliZ;
-    let cohX, cohY, cohZ;
-    let neighborCount;
-
     for (let i = 0; i < count; i++) {
         const px = posX[i], py = posY[i], pz = posZ[i];
         const candidates = grid.query(px, py, pz);
 
-        sepX = sepY = sepZ = 0;
-        sepCount = 0;
-        aliX = aliY = aliZ = 0;
-        cohX = cohY = cohZ = 0;
-        neighborCount = 0;
-
+        // ── Topological neighbour selection ──────────────────────
+        // Instead of interacting with every bird within a fixed
+        // radius (metric model), each bird locks on to its K nearest
+        // neighbours. This reproduces the scale-free correlations
+        // observed in real starling flocks (Ballerini et al. 2008).
+        let kCount = 0;
         for (let c = 0, clen = candidates.length; c < clen; c++) {
             const j = candidates[c];
             if (j === i) continue;
@@ -328,47 +327,69 @@ function simulateBoids(dt) {
             const dz = posZ[j] - pz;
             const distSq = dx * dx + dy * dy + dz * dz;
 
-            if (distSq < percRadSq && distSq > 0.001) {
-                neighborCount++;
-                // Alignment
-                aliX += velX[j];
-                aliY += velY[j];
-                aliZ += velZ[j];
-                // Cohesion
-                cohX += posX[j];
-                cohY += posY[j];
-                cohZ += posZ[j];
+            if (distSq > percRadSq || distSq < 0.001) continue;
 
-                // Separation (stronger when closer)
-                if (distSq < sepDistSq) {
-                    const inv = 1.0 / Math.sqrt(distSq);
-                    sepX -= dx * inv;
-                    sepY -= dy * inv;
-                    sepZ -= dz * inv;
-                    sepCount++;
+            if (kCount < K_NEIGHBORS) {
+                _kDist[kCount] = distSq;
+                _kIdx[kCount] = j;
+                kCount++;
+            } else {
+                let maxK = 0;
+                for (let k = 1; k < K_NEIGHBORS; k++) {
+                    if (_kDist[k] > _kDist[maxK]) maxK = k;
                 }
+                if (distSq < _kDist[maxK]) {
+                    _kDist[maxK] = distSq;
+                    _kIdx[maxK] = j;
+                }
+            }
+        }
+
+        // ── Compute flocking forces from K nearest ──────────────
+        let sepX = 0, sepY = 0, sepZ = 0, sepCount = 0;
+        let aliX = 0, aliY = 0, aliZ = 0;
+        let cohX = 0, cohY = 0, cohZ = 0;
+
+        for (let k = 0; k < kCount; k++) {
+            const j = _kIdx[k];
+            const dSq = _kDist[k];
+
+            aliX += velX[j];
+            aliY += velY[j];
+            aliZ += velZ[j];
+
+            cohX += posX[j];
+            cohY += posY[j];
+            cohZ += posZ[j];
+
+            if (dSq < sepDistSq) {
+                const dx = posX[j] - px;
+                const dy = posY[j] - py;
+                const dz = posZ[j] - pz;
+                const inv = 1.0 / Math.sqrt(dSq);
+                sepX -= dx * inv;
+                sepY -= dy * inv;
+                sepZ -= dz * inv;
+                sepCount++;
             }
         }
 
         let ax = 0, ay = 0, az = 0;
 
-        if (neighborCount > 0) {
-            const invN = 1.0 / neighborCount;
+        if (kCount > 0) {
+            const invN = 1.0 / kCount;
 
-            // Alignment: steer toward average velocity
             aliX *= invN; aliY *= invN; aliZ *= invN;
             ax += (aliX - velX[i]) * alignment * 0.1;
             ay += (aliY - velY[i]) * alignment * 0.1;
             az += (aliZ - velZ[i]) * alignment * 0.1;
 
-            // Cohesion: steer toward center of mass
             cohX *= invN; cohY *= invN; cohZ *= invN;
             ax += (cohX - px) * cohesion * 0.02;
             ay += (cohY - py) * cohesion * 0.02;
             az += (cohZ - pz) * cohesion * 0.02;
         }
 
-        // Separation
         if (sepCount > 0) {
             ax += sepX * separation * 0.8;
             ay += sepY * separation * 0.8;
@@ -401,15 +422,18 @@ function simulateBoids(dt) {
         }
 
         // Angular momentum damping — prevents stable circular orbits
-        // by applying a gentle counter-torque to each bird's tangential
-        // velocity relative to the flock centre in the XZ plane.
+        // by damping the tangential velocity component relative to the
+        // flock centre in all three dimensions.
         const rx = px - BOUNDS_CENTER[0];
+        const ry = py - BOUNDS_CENTER[1];
         const rz = pz - BOUNDS_CENTER[2];
-        const rDist = Math.sqrt(rx * rx + rz * rz) + 0.01;
-        const tangVel = (-rz * velX[i] + rx * velZ[i]) / rDist;
-        const dampStr = 0.004;
-        ax += (rz / rDist) * tangVel * dampStr;
-        az -= (rx / rDist) * tangVel * dampStr;
+        const rDist = Math.sqrt(rx * rx + ry * ry + rz * rz) + 0.01;
+        const rInv = 1.0 / rDist;
+        const vDotR = (velX[i] * rx + velY[i] * ry + velZ[i] * rz) * rInv;
+        const dampStr = 0.012;
+        ax -= (velX[i] - vDotR * rx * rInv) * dampStr;
+        ay -= (velY[i] - vDotR * ry * rInv) * dampStr;
+        az -= (velZ[i] - vDotR * rz * rInv) * dampStr;
 
         // Small noise for organic feel
         ax += (Math.random() - 0.5) * 0.02;
@@ -475,7 +499,7 @@ const cameraState = {
     lastY: 0,
     // Spherical coordinates relative to lookAt target
     theta: 0,     // horizontal angle
-    phi: Math.PI / 2 - 0.27, // vertical angle (slightly above horizon)
+    phi: Math.PI / 2 + 0.17, // slightly below flock, looking up (as in real life)
     radius: 150,
     targetX: BOUNDS_CENTER[0],
     targetY: BOUNDS_CENTER[1],
@@ -523,10 +547,13 @@ function setupCameraControls() {
         cameraState.isDragging = false;
     });
 
-    // Scroll wheel to zoom
+    // Scroll wheel / trackpad pinch to zoom
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
-        cameraState.radius = Math.max(40, Math.min(400, cameraState.radius + e.deltaY * 0.15));
+        // macOS trackpad pinch fires wheel events with ctrlKey === true;
+        // deltaY values are much smaller, so we use a higher multiplier.
+        const scale = e.ctrlKey ? 3.0 : 0.15;
+        cameraState.radius = Math.max(40, Math.min(400, cameraState.radius + e.deltaY * scale));
         updateCameraFromState();
     }, { passive: false });
 
