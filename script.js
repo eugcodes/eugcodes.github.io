@@ -1,10 +1,5 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // ════════════════════════════════════════════════════════════
 // Configuration
@@ -26,18 +21,8 @@ const state = {
         sunAzimuth: 180,
         turbidity: 5.2,
         rayleigh: 2.2,
-        mieCoefficient: 0.001,
-        mieDirectionalG: 0.63,
-        ambientLight: 2.0,
-        directionalLight: 1.4,
-    },
-    effects: {
-        bloomIntensity: 0.15,
-        bloomThreshold: 0.9,
-        bloomRadius: 0.4,
-        vignette: 0.35,
-        exposure: 0.5,
-        filmGrain: 0.03,
+        mieCoefficient: 0,
+        mieDirectionalG: 0,
     },
 };
 
@@ -55,18 +40,6 @@ const settingsConfig = {
         { key: 'sunAzimuth', label: 'Sun Azimuth', min: 0, max: 360, step: 1, desc: 'Compass direction of the sun. 0\u00b0 is north, 90\u00b0 east, 180\u00b0 south, 270\u00b0 west.' },
         { key: 'turbidity', label: 'Sky Turbidity', min: 1, max: 20, step: 0.1, desc: 'Atmospheric haziness. Low values give a clear blue sky; high values simulate dust, humidity, or smog.' },
         { key: 'rayleigh', label: 'Sky Rayleigh', min: 0, max: 4, step: 0.1, desc: 'Rayleigh scattering coefficient. Controls the blue tint of the sky; higher values intensify the blue.' },
-        { key: 'mieCoefficient', label: 'Mie Coefficient', min: 0, max: 0.1, step: 0.001, desc: 'Mie scattering amount. Controls the hazy glow around the sun from atmospheric particles.' },
-        { key: 'mieDirectionalG', label: 'Mie Directional G', min: 0, max: 0.999, step: 0.01, desc: 'Mie scattering directionality. Higher values concentrate the sun halo into a tighter, brighter disc.' },
-        { key: 'ambientLight', label: 'Ambient Light', min: 0, max: 5, step: 0.1, desc: 'Base light that illuminates all birds equally, simulating light scattered by the sky.' },
-        { key: 'directionalLight', label: 'Directional Light', min: 0, max: 5, step: 0.1, desc: 'Intensity of sunlight casting on the birds. Creates highlights and shadows based on sun position.' },
-    ],
-    effects: [
-        { key: 'bloomIntensity', label: 'Bloom Intensity', min: 0, max: 2, step: 0.05, desc: 'Strength of the glow effect on bright areas. Simulates light bleeding in a camera lens.' },
-        { key: 'bloomThreshold', label: 'Bloom Threshold', min: 0, max: 1, step: 0.05, desc: 'Brightness level above which bloom is applied. Lower values make more of the scene glow.' },
-        { key: 'bloomRadius', label: 'Bloom Radius', min: 0, max: 1, step: 0.05, desc: 'How far the bloom glow spreads from bright areas.' },
-        { key: 'vignette', label: 'Vignette', min: 0, max: 1, step: 0.05, desc: 'Darkening around the edges of the frame, drawing the eye toward the centre.' },
-        { key: 'exposure', label: 'Exposure', min: 0.1, max: 3, step: 0.1, desc: 'Overall brightness of the scene. Simulates camera exposure adjustment.' },
-        { key: 'filmGrain', label: 'Film Grain', min: 0, max: 0.5, step: 0.01, desc: 'Adds subtle noise to the image, giving an analog film aesthetic.' },
     ],
 };
 
@@ -144,15 +117,16 @@ let grid = new SpatialGrid(state.boids.perceptionRadius);
 
 let renderer, scene, camera, sky, sun;
 let birdMesh, birdMaterial;
-let ambientLight, dirLight;
-let composer, bloomPass, vignetteGrainPass;
 let clock;
 let shaderTimeUniform = { value: 0 };
 
-// Wandering attractors for organic flock shape
+// Stochastic attractors — random-walk targets that change direction
+// unpredictably, producing the irregular directional shifts observed
+// in real starling murmurations (Cavagna et al. 2010, 2015).
 const attractors = [
-    { x: 0, y: 80, z: 0 },
-    { x: 0, y: 80, z: 0 },
+    { x: 0, y: 80, z: 0, tx: 0, ty: 80, tz: 0, nextChange: 0 },
+    { x: 0, y: 80, z: 0, tx: 0, ty: 80, tz: 0, nextChange: 3 },
+    { x: 0, y: 80, z: 0, tx: 0, ty: 80, tz: 0, nextChange: 6 },
 ];
 
 // Mouse interaction
@@ -161,9 +135,6 @@ const raycaster = new THREE.Raycaster();
 const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 const mouseNDC = new THREE.Vector2();
 const mouseWorld = new THREE.Vector3();
-
-// Camera orbit
-let cameraTime = 0;
 
 // ════════════════════════════════════════════════════════════
 // Bird Geometry
@@ -202,7 +173,7 @@ function initRenderer() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = state.effects.exposure;
+    renderer.toneMappingExposure = 0.5;
 
     scene = new THREE.Scene();
 
@@ -241,33 +212,13 @@ function updateSky() {
 
     sun.setFromSphericalCoords(1, phi, theta);
     uniforms['sunPosition'].value.copy(sun);
-
-    // Update directional light to match sun
-    if (dirLight) {
-        dirLight.position.copy(sun).multiplyScalar(200);
-        dirLight.intensity = env.directionalLight;
-    }
-    if (ambientLight) {
-        ambientLight.intensity = env.ambientLight;
-    }
-}
-
-function initLights() {
-    ambientLight = new THREE.AmbientLight(0x8899bb, state.environment.ambientLight);
-    scene.add(ambientLight);
-
-    dirLight = new THREE.DirectionalLight(0xffeedd, state.environment.directionalLight);
-    dirLight.position.copy(sun).multiplyScalar(200);
-    scene.add(dirLight);
 }
 
 function initBirds() {
     const geo = createBirdGeometry();
 
-    birdMaterial = new THREE.MeshStandardMaterial({
+    birdMaterial = new THREE.MeshBasicMaterial({
         color: 0x1a1a20,
-        roughness: 0.85,
-        metalness: 0.1,
         side: THREE.DoubleSide,
     });
 
@@ -294,63 +245,6 @@ function initBirds() {
     birdMesh.count = state.boids.count;
     birdMesh.frustumCulled = false;
     scene.add(birdMesh);
-}
-
-function initPostProcessing() {
-    composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-
-    bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        state.effects.bloomIntensity,
-        state.effects.bloomRadius,
-        state.effects.bloomThreshold
-    );
-    composer.addPass(bloomPass);
-
-    // Custom vignette + film grain pass
-    const VignetteGrainShader = {
-        uniforms: {
-            tDiffuse: { value: null },
-            uVignette: { value: state.effects.vignette },
-            uGrain: { value: state.effects.filmGrain },
-            uTime: { value: 0 },
-        },
-        vertexShader: `
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `,
-        fragmentShader: `
-            uniform sampler2D tDiffuse;
-            uniform float uVignette;
-            uniform float uGrain;
-            uniform float uTime;
-            varying vec2 vUv;
-            void main() {
-                vec4 color = texture2D(tDiffuse, vUv);
-
-                // Vignette
-                vec2 uv = vUv * 2.0 - 1.0;
-                float vig = 1.0 - dot(uv, uv) * uVignette * 0.5;
-                vig = smoothstep(0.0, 1.0, vig);
-                color.rgb *= vig;
-
-                // Film grain
-                float grain = (fract(sin(dot(vUv * uTime * 100.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * uGrain;
-                color.rgb += grain;
-
-                gl_FragColor = color;
-            }
-        `,
-    };
-
-    vignetteGrainPass = new ShaderPass(VignetteGrainShader);
-    composer.addPass(vignetteGrainPass);
-
-    composer.addPass(new OutputPass());
 }
 
 // ════════════════════════════════════════════════════════════
@@ -383,13 +277,22 @@ function initializeBoids(startIdx = 0) {
 }
 
 function updateAttractors(t) {
-    attractors[0].x = Math.sin(t * 0.23) * 30 + Math.cos(t * 0.17) * 20;
-    attractors[0].y = BOUNDS_CENTER[1] + Math.sin(t * 0.19) * 15;
-    attractors[0].z = Math.cos(t * 0.21) * 30 + Math.sin(t * 0.13) * 20;
-
-    attractors[1].x = Math.cos(t * 0.18) * 35 + Math.sin(t * 0.29) * 15;
-    attractors[1].y = BOUNDS_CENTER[1] + Math.cos(t * 0.15) * 12;
-    attractors[1].z = Math.sin(t * 0.16) * 35 + Math.cos(t * 0.24) * 15;
+    const r = BOUNDS_RADIUS * 0.5;
+    for (const attr of attractors) {
+        if (t > attr.nextChange) {
+            // Pick a new random target within bounds
+            attr.tx = BOUNDS_CENTER[0] + (Math.random() - 0.5) * 2 * r;
+            attr.ty = BOUNDS_CENTER[1] + (Math.random() - 0.5) * r;
+            attr.tz = BOUNDS_CENTER[2] + (Math.random() - 0.5) * 2 * r;
+            // Next change in 3-10 seconds (irregular timing)
+            attr.nextChange = t + 3 + Math.random() * 7;
+        }
+        // Move toward target at varying rates
+        const lerp = 0.015;
+        attr.x += (attr.tx - attr.x) * lerp;
+        attr.y += (attr.ty - attr.y) * lerp;
+        attr.z += (attr.tz - attr.z) * lerp;
+    }
 }
 
 function simulateBoids(dt) {
@@ -574,27 +477,6 @@ function updateBirdMesh() {
 }
 
 // ════════════════════════════════════════════════════════════
-// Camera
-// ════════════════════════════════════════════════════════════
-
-function updateCamera(dt) {
-    cameraTime += dt;
-    const swaySpeed = 0.025;
-    const swayAmplitude = 0.4; // ~23 degrees each way
-    const orbitRadius = 220;
-    const bobAmount = 4;
-    const bobSpeed = 0.2;
-
-    // Sway back and forth instead of continuous orbit so the sun stays in view
-    const angle = Math.sin(cameraTime * swaySpeed) * swayAmplitude;
-    camera.position.x = Math.sin(angle) * orbitRadius;
-    camera.position.z = Math.cos(angle) * orbitRadius;
-    camera.position.y = 40 + Math.sin(cameraTime * bobSpeed) * bobAmount;
-
-    camera.lookAt(BOUNDS_CENTER[0], BOUNDS_CENTER[1], BOUNDS_CENTER[2]);
-}
-
-// ════════════════════════════════════════════════════════════
 // Audio System
 // ════════════════════════════════════════════════════════════
 
@@ -750,14 +632,6 @@ function onSettingChange(category, key, value) {
     if (category === 'environment') {
         updateSky();
     }
-    if (category === 'effects') {
-        if (key === 'bloomIntensity') bloomPass.strength = value;
-        if (key === 'bloomThreshold') bloomPass.threshold = value;
-        if (key === 'bloomRadius') bloomPass.radius = value;
-        if (key === 'vignette') vignetteGrainPass.uniforms.uVignette.value = value;
-        if (key === 'filmGrain') vignetteGrainPass.uniforms.uGrain.value = value;
-        if (key === 'exposure') renderer.toneMappingExposure = value;
-    }
     if (category === 'boids' && key === 'count') {
         const oldCount = birdMesh.count;
         const newCount = Math.min(value, MAX_BIRDS);
@@ -804,7 +678,7 @@ function setupUI() {
 
     // Screenshot
     btnScreenshot.addEventListener('click', () => {
-        composer.render();
+        renderer.render(scene, camera);
         const dataURL = renderer.domElement.toDataURL('image/png');
         const link = document.createElement('a');
         link.download = 'starlings.png';
@@ -836,7 +710,6 @@ function onResize() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    composer.setSize(w, h);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -852,14 +725,10 @@ function animate() {
     shaderTimeUniform.value = elapsed;
 
     updateAttractors(elapsed);
-    updateCamera(dt);
     simulateBoids(dt);
     updateBirdMesh();
 
-    // Update post-processing uniforms
-    vignetteGrainPass.uniforms.uTime.value = elapsed;
-
-    composer.render();
+    renderer.render(scene, camera);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -869,9 +738,7 @@ function animate() {
 function init() {
     initRenderer();
     initSky();
-    initLights();
     initBirds();
-    initPostProcessing();
     initializeBoids();
     setupUI();
     animate();
