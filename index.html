@@ -65,9 +65,9 @@
       /* ── Configuration ── */
       const FISH_COUNT = 500;
       const BOUNDS = 40;
-      const MAX_SPEED = 0.35;
-      const MIN_SPEED = 0.10;
-      const CRUISE_SPEED = 0.22;
+      const MAX_SPEED = 0.09;
+      const MIN_SPEED = 0.025;
+      const CRUISE_SPEED = 0.055;
 
       /* Neighbor radii (in body-length units, 1 BL ≈ 1.8 scene units) */
       const SEPARATION_DIST = 1.6;   /* 0.5–1.0 BL — hard repulsion zone */
@@ -80,14 +80,14 @@
        * Alignment is weak because polarization emerges from
        * the interplay of attraction and repulsion geometry.
        */
-      const SEPARATION_FORCE = 0.06;
-      const ALIGNMENT_FORCE = 0.025;
-      const COHESION_FORCE = 0.04;
-      const WANDER_FORCE = 0.003;
-      const BOUNDARY_FORCE = 0.05;
+      const SEPARATION_FORCE = 0.015;
+      const ALIGNMENT_FORCE = 0.007;
+      const COHESION_FORCE = 0.01;
+      const WANDER_FORCE = 0.0008;
+      const BOUNDARY_FORCE = 0.012;
 
       /* Speed regulation — fish slow down near neighbors, speed up to rejoin */
-      const SPEED_REGULATION = 0.015;
+      const SPEED_REGULATION = 0.004;
 
       /* Visual field: fish see ~310°, blind spot directly behind (~50°) */
       const BLIND_SPOT_COS = Math.cos(Math.PI * (310 / 360)); /* cos(155°) ≈ -0.906 */
@@ -145,16 +145,19 @@
       causticPlane.rotation.x = -Math.PI / 2;
       scene.add(causticPlane);
 
+      /* Throttle caustic redraws — every 3rd frame for performance */
+      let causticFrame = 0;
       function updateCaustics(time) {
+        if (++causticFrame % 3 !== 0) return;
         causticCtx.clearRect(0, 0, 256, 256);
-        const t = time * 0.0003;
+        const t = time * 0.00008;
         for (let i = 0; i < 18; i++) {
           const x = 128 + Math.sin(t + i * 1.7) * 80 + Math.cos(t * 0.7 + i * 2.3) * 40;
           const y = 128 + Math.cos(t * 0.8 + i * 1.3) * 80 + Math.sin(t * 0.5 + i * 1.9) * 40;
           const r = 30 + Math.sin(t + i) * 15;
           const gradient = causticCtx.createRadialGradient(x, y, 0, x, y, r);
-          gradient.addColorStop(0, 'rgba(120, 200, 255, 0.4)');
-          gradient.addColorStop(0.5, 'rgba(80, 170, 230, 0.15)');
+          gradient.addColorStop(0, 'rgba(120, 200, 255, 0.35)');
+          gradient.addColorStop(0.5, 'rgba(80, 170, 230, 0.12)');
           gradient.addColorStop(1, 'rgba(40, 120, 180, 0)');
           causticCtx.fillStyle = gradient;
           causticCtx.fillRect(0, 0, 256, 256);
@@ -198,7 +201,7 @@
         particlePositions[i * 3] = (Math.random() - 0.5) * 100;
         particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 60;
         particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 80;
-        particleSpeeds.push(0.002 + Math.random() * 0.008);
+        particleSpeeds.push(0.0005 + Math.random() * 0.002);
       }
       particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
       const particleMat = new THREE.PointsMaterial({
@@ -311,17 +314,25 @@
       }
       school.instanceColor.needsUpdate = true;
 
-      /* ── Lighting ── */
-      const ambientLight = new THREE.AmbientLight(0x1a3050, 0.6);
-      scene.add(ambientLight);
+      /* ── Lighting (realistic underwater) ── */
+      /* Hemisphere: sky-color from above, deep blue from below */
+      const hemiLight = new THREE.HemisphereLight(0x3a7a9a, 0x061225, 0.5);
+      scene.add(hemiLight);
 
-      const dirLight = new THREE.DirectionalLight(0x6ab0d4, 0.8);
-      dirLight.position.set(5, 30, 10);
-      scene.add(dirLight);
+      /* Sun filtering through water — warm-shifted, from above-right */
+      const sunLight = new THREE.DirectionalLight(0x8ac4d8, 0.9);
+      sunLight.position.set(8, 35, 5);
+      scene.add(sunLight);
 
-      const rimLight = new THREE.DirectionalLight(0x2a5575, 0.3);
-      rimLight.position.set(-10, -5, -15);
-      scene.add(rimLight);
+      /* Scattered fill — cool blue-green from the side */
+      const scatterLight = new THREE.DirectionalLight(0x2a6578, 0.35);
+      scatterLight.position.set(-15, 5, -10);
+      scene.add(scatterLight);
+
+      /* Faint upwelling light from below (scattered seafloor reflection) */
+      const upwellLight = new THREE.DirectionalLight(0x0a2035, 0.15);
+      upwellLight.position.set(0, -20, 0);
+      scene.add(upwellLight);
 
       /* ── Boid state ── */
       const positions = [];
@@ -515,25 +526,25 @@
         school.instanceMatrix.needsUpdate = true;
       }
 
-      /* ── Camera ── */
+      /* ── Camera — very slow drift ── */
       let camAngle = 0;
       const camRadius = 50;
 
       function updateCamera(time) {
-        camAngle += 0.0004;
-        const wobbleY = Math.sin(time * 0.00012) * 3;
-        const wobbleR = Math.sin(time * 0.00008) * 6;
+        camAngle += 0.00008;
+        const wobbleY = Math.sin(time * 0.00003) * 2.5;
+        const wobbleR = Math.sin(time * 0.00002) * 4;
         camera.position.x = Math.cos(camAngle) * (camRadius + wobbleR);
         camera.position.z = Math.sin(camAngle) * (camRadius + wobbleR);
         camera.position.y = wobbleY;
         camera.lookAt(0, 0, 0);
       }
 
-      /* ── Animate light rays ── */
+      /* ── Animate light rays — slow breathing ── */
       function updateRays(time) {
         const children = rayGroup.children;
         for (let i = 0; i < children.length; i++) {
-          children[i].material.opacity = 0.015 + Math.sin(time * 0.0002 + i * 1.5) * 0.01;
+          children[i].material.opacity = 0.015 + Math.sin(time * 0.00005 + i * 1.5) * 0.01;
         }
       }
 
