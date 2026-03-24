@@ -67,7 +67,7 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 16px;
-    align-items: end;
+    align-items: stretch;
 }
 
 .card {
@@ -113,6 +113,7 @@ body {
 }
 
 .card-text {
+    flex: 1;
     padding: 14px 16px 16px;
 }
 
