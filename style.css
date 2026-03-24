@@ -11,7 +11,7 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* ── Contact Info ────────────────────────────── */
+/* ── Contact ─────────────────────────────────── */
 
 .contact-info {
     position: fixed;
@@ -36,7 +36,7 @@ body {
 }
 
 .contact-email:hover {
-    color: rgba(0, 0, 0, 0.8);
+    color: rgba(0, 0, 0, 0.6);
 }
 
 .contact-linkedin {
@@ -54,93 +54,79 @@ body {
     fill: #000;
 }
 
-/* ── Projects ────────────────────────────────── */
+/* ── Cards ───────────────────────────────────── */
 
 .projects {
-    display: flex;
-    gap: 24px;
-    padding: 100px 48px 48px;
-    max-width: 1280px;
-    margin: 0 auto;
-}
-
-.project-card {
-    flex: 1;
+    position: fixed;
+    bottom: 40px;
+    left: 40px;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 12px;
+    gap: 16px;
+    z-index: 10;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    width: 320px;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 10px;
     overflow: hidden;
     text-decoration: none;
-    color: rgba(0, 0, 0, 0.7);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    color: inherit;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.project-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+.card:visited {
+    color: inherit;
 }
 
-.project-card.placeholder {
-    opacity: 0.5;
+.card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.32);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+}
+
+.card.placeholder {
+    opacity: 0.45;
     pointer-events: none;
 }
 
-/* ── Preview Image ───────────────────────────── */
-
-.project-preview {
+.card-img {
+    display: block;
+    width: 100%;
     aspect-ratio: 16 / 10;
-    overflow: hidden;
+    object-fit: cover;
+}
+
+.card-img.empty {
     background: rgba(0, 0, 0, 0.04);
 }
 
-.project-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.4s ease;
+.card-text {
+    padding: 14px 16px 16px;
 }
 
-.project-card:hover .project-preview img {
-    transform: scale(1.03);
-}
-
-.project-preview.empty {
-    background: rgba(0, 0, 0, 0.06);
-}
-
-/* ── Card Body ───────────────────────────────── */
-
-.project-body {
-    padding: 20px 22px 24px;
-}
-
-.project-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: rgba(0, 0, 0, 0.75);
-    letter-spacing: 0.2px;
-    margin-bottom: 8px;
-}
-
-.project-desc {
+.card-text h2 {
     font-size: 12.5px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.7);
+    letter-spacing: 0.15px;
+    margin-bottom: 6px;
+}
+
+.card-text p {
+    font-size: 11px;
     font-weight: 300;
-    line-height: 1.6;
-    color: rgba(0, 0, 0, 0.5);
+    line-height: 1.55;
+    color: rgba(0, 0, 0, 0.45);
 }
 
 /* ── Responsive ──────────────────────────────── */
-
-@media (max-width: 900px) {
-    .projects {
-        flex-direction: column;
-        padding: 100px 24px 24px;
-        max-width: 500px;
-    }
-}
 
 @media (max-width: 768px) {
     .contact-info {
@@ -149,6 +135,12 @@ body {
     }
 
     .projects {
-        padding-top: 80px;
+        bottom: 24px;
+        left: 16px;
+        right: 16px;
+    }
+
+    .card {
+        width: 100%;
     }
 }
