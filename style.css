@@ -7,23 +7,23 @@
 body {
     min-height: 100vh;
     min-height: 100dvh;
-    background: #bec5c1;
+    background: #b5c4cc;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    position: relative;
     padding: 28px;
 }
 
 /* ── Contact ─────────────────────────────────── */
 
 .contact-info {
+    position: fixed;
+    top: 28px;
+    right: 28px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    align-self: flex-end;
-    flex-shrink: 0;
+    z-index: 10;
 }
 
 .contact-email {
@@ -60,10 +60,12 @@ body {
 /* ── Cards ───────────────────────────────────── */
 
 .projects {
+    position: fixed;
+    bottom: 40px;
+    left: 40px;
     display: flex;
     gap: 16px;
     align-items: flex-end;
-    flex-shrink: 0;
 }
 
 .card {
@@ -105,6 +107,8 @@ body {
 
 .card-img.empty {
     background: rgba(0, 0, 0, 0.04);
+    aspect-ratio: auto;
+    height: 4px;
 }
 
 .card-text {
@@ -136,18 +140,25 @@ body {
 }
 
 @media (max-width: 768px) {
-    body {
-        padding: 20px;
-        gap: 32px;
-        justify-content: flex-start;
+    .contact-info {
+        position: fixed;
+        top: 20px;
+        right: 20px;
     }
 
     .projects {
+        position: static;
         flex-direction: column;
         align-items: stretch;
+        padding-top: 60px;
     }
 
     .card {
         width: 100%;
+        max-width: 360px;
+    }
+
+    body {
+        padding: 20px;
     }
 }
