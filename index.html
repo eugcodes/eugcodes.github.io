@@ -9,18 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
-        }
-    }
-    </script>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-
     <div class="contact-info">
         <a href="mailto:contact@eugenekim.ca" class="contact-email">contact@eugenekim.ca</a>
         <a href="https://www.linkedin.com/in/eugenekimlinkedin/" class="contact-linkedin" target="_blank" rel="noopener noreferrer" title="LinkedIn">
@@ -30,32 +20,32 @@
         </a>
     </div>
 
-    <button id="btn-settings" class="settings-btn" title="Settings">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"/>
-            <line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/>
-            <line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <line x1="17" y1="16" x2="23" y2="16"/>
-        </svg>
-    </button>
-
-    <div id="settings-panel" class="settings-panel">
-        <div class="panel-header">
-            <div class="panel-tabs">
-                <button class="tab active" data-tab="boids">BOIDS</button>
-                <button class="tab" data-tab="environment">ENVIRONMENT</button>
+    <main class="projects">
+        <a href="https://www.eugenekim.ca/SloanSkySurveyVisualizer/" class="project-card" target="_blank" rel="noopener noreferrer">
+            <div class="project-preview">
+                <img src="images/sdss-preview.png" alt="Sloan Digital Sky Survey Visualizer — 3D galaxy map" loading="lazy">
             </div>
-            <button id="btn-close-settings" class="close-btn">&times;</button>
-        </div>
-        <div class="tab-content" id="tab-boids"></div>
-        <div class="tab-content hidden" id="tab-environment"></div>
-    </div>
+            <div class="project-body">
+                <h2 class="project-title">Sloan Digital Sky Survey Visualizer</h2>
+                <p class="project-desc">A 3D visualization of the universe you can explore, built from 150,000 galaxies in the Sloan Digital Sky Survey. Drift through 2 billion light-years of space and reveal the cosmic web — the vast filaments and voids that form the large-scale structure of the universe, mapped from the Tempel et al. (2014) filament catalog. Tap any galaxy to see its image and data.</p>
+            </div>
+        </a>
 
-    <script type="module" src="script.js"></script>
+        <a href="#" class="project-card placeholder">
+            <div class="project-preview empty"></div>
+            <div class="project-body">
+                <h2 class="project-title">Project Two</h2>
+                <p class="project-desc">Coming soon.</p>
+            </div>
+        </a>
+
+        <a href="#" class="project-card placeholder">
+            <div class="project-preview empty"></div>
+            <div class="project-body">
+                <h2 class="project-title">Project Three</h2>
+                <p class="project-desc">Coming soon.</p>
+            </div>
+        </a>
+    </main>
 </body>
 </html>
