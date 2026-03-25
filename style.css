@@ -5,15 +5,14 @@
 }
 
 body {
-    height: 100vh;
-    height: 100dvh;
+    min-height: 100vh;
+    min-height: 100dvh;
     background: #b5c4cc;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     padding: 28px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
 }
 
 /* ── Contact ─────────────────────────────────── */
@@ -66,10 +65,8 @@ body {
     align-items: stretch;
     flex: 1;
     align-content: end;
-    overflow-y: auto;
     margin-top: 16px;
     padding-bottom: 12px;
-    min-height: 0;
 }
 
 .card {
