@@ -5,24 +5,24 @@
 }
 
 body {
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
     background: #b5c4cc;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    position: relative;
     padding: 28px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 /* ── Contact ─────────────────────────────────── */
 
 .contact-info {
-    position: fixed;
-    top: 28px;
-    right: 28px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    flex-shrink: 0;
     z-index: 10;
 }
 
@@ -60,14 +60,16 @@ body {
 /* ── Cards ───────────────────────────────────── */
 
 .projects {
-    position: fixed;
-    bottom: 40px;
-    left: 28px;
-    right: 28px;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
     gap: 16px;
     align-items: stretch;
+    flex: 1;
+    align-content: end;
+    overflow-y: auto;
+    margin-top: 16px;
+    padding-bottom: 12px;
+    min-height: 0;
 }
 
 .card {
@@ -135,6 +137,12 @@ body {
 /* ── Responsive ──────────────────────────────── */
 
 @media (max-width: 768px) {
+    body {
+        padding: 20px;
+        height: auto;
+        overflow: visible;
+    }
+
     .contact-info {
         position: fixed;
         top: 20px;
@@ -142,13 +150,11 @@ body {
     }
 
     .projects {
-        position: static;
         grid-template-columns: 1fr;
         max-width: 400px;
         padding-top: 60px;
-    }
-
-    body {
-        padding: 20px;
+        flex: none;
+        align-content: start;
+        overflow-y: visible;
     }
 }
