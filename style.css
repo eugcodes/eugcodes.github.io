@@ -4,154 +4,148 @@
     box-sizing: border-box;
 }
 
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
 body {
-    min-height: 100vh;
-    min-height: 100dvh;
-    background: #b5c4cc;
+    /* Matches the darkest sky band so there is no flash before first paint. */
+    background: #262e3a;
+    color: #e6e3dd;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
-    padding: 28px;
+}
+
+/* ── Scene ───────────────────────────────────── */
+
+#scene {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+    font-size: 14px;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: pre;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    text-rendering: optimizeSpeed;
+}
+
+/* ── Overlay ─────────────────────────────────── */
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    padding: 30px 34px;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+}
+
+.overlay a {
+    pointer-events: auto;
 }
 
 /* ── Contact ─────────────────────────────────── */
 
 .contact-info {
+    align-self: flex-end;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    flex-shrink: 0;
-    z-index: 10;
+    gap: 9px;
+}
+
+.contact-email,
+.contact-linkedin {
+    color: rgba(230, 227, 221, 0.62);
+    text-decoration: none;
+    transition: color 0.35s ease;
 }
 
 .contact-email {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 300;
-    color: rgba(0, 0, 0, 0.6);
-    text-decoration: none;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.35px;
+    text-shadow: 0 1px 10px rgba(20, 25, 32, 0.75);
 }
 
 .contact-email:visited {
-    color: rgba(0, 0, 0, 0.6);
+    color: rgba(230, 227, 221, 0.62);
 }
 
-.contact-email:hover {
-    color: rgba(0, 0, 0, 0.6);
+.contact-email:hover,
+.contact-linkedin:hover {
+    color: rgba(240, 238, 233, 0.95);
 }
 
 .contact-linkedin {
     display: inline-flex;
-    margin-top: 8px;
-    opacity: 0.6;
-    transition: opacity 0.2s ease;
+    filter: drop-shadow(0 1px 8px rgba(20, 25, 32, 0.75));
 }
 
-.contact-linkedin:hover {
-    opacity: 0.9;
+/* ── Identity ────────────────────────────────── */
+
+.identity {
+    position: relative;
+    /* Own stacking context, so the shade below sits behind the type but
+       still above the scene. */
+    isolation: isolate;
+    padding: 6px 2px;
 }
 
-.contact-linkedin svg {
-    fill: #000;
-}
-
-/* ── Cards ───────────────────────────────────── */
-
-.projects {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 16px;
-    align-items: stretch;
-    flex: 1;
-    align-content: end;
-    margin-top: 16px;
-    padding-bottom: 12px;
-}
-
-.card {
-    display: flex;
-    flex-direction: column;
-    background: rgba(255, 255, 255, 0.22);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 10px;
-    overflow: hidden;
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.card:visited {
-    color: inherit;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-    background: rgba(255, 255, 255, 0.32);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
-}
-
-.card.placeholder {
-    opacity: 0.45;
+/* Soft pool of shade so the type stays readable over the water. */
+.identity::before {
+    content: '';
+    position: absolute;
+    left: -60px;
+    right: -90px;
+    top: -50px;
+    bottom: -60px;
+    background: radial-gradient(ellipse at 32% 55%, rgba(18, 23, 30, 0.62), rgba(18, 23, 30, 0) 72%);
     pointer-events: none;
+    z-index: -1;
 }
 
-.card-img {
-    display: block;
-    width: 100%;
-    aspect-ratio: 16 / 10;
-    object-fit: cover;
+.identity h1 {
+    font-size: 25px;
+    font-weight: 200;
+    letter-spacing: 2.4px;
+    color: rgba(240, 238, 233, 0.94);
 }
 
-.card-img.empty {
-    background: rgba(0, 0, 0, 0.04);
-    aspect-ratio: auto;
-    height: 4px;
-}
-
-.card-text {
-    flex: 1;
-    padding: 14px 16px 16px;
-}
-
-.card-text h2 {
-    font-size: 12.5px;
-    font-weight: 500;
-    color: rgba(0, 0, 0, 0.7);
-    letter-spacing: 0.15px;
-    margin-bottom: 6px;
-}
-
-.card-text p {
-    font-size: 11px;
+.identity p {
+    margin-top: 9px;
+    font-size: 11.5px;
     font-weight: 300;
-    line-height: 1.55;
-    color: rgba(0, 0, 0, 0.45);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: rgba(230, 227, 221, 0.55);
 }
 
 /* ── Responsive ──────────────────────────────── */
 
-@media (max-width: 768px) {
-    body {
-        padding: 20px;
-        height: auto;
-        overflow: visible;
+@media (max-width: 600px) {
+    .overlay {
+        padding: 22px 22px 30px;
     }
 
-    .contact-info {
-        position: fixed;
-        top: 20px;
-        right: 20px;
+    .identity h1 {
+        font-size: 21px;
+        letter-spacing: 1.8px;
     }
 
-    .projects {
-        grid-template-columns: 1fr;
-        max-width: 400px;
-        padding-top: 60px;
-        flex: none;
-        align-content: start;
-        overflow-y: visible;
+    .identity p {
+        font-size: 10px;
+        letter-spacing: 1.2px;
+    }
+
+    .contact-email {
+        font-size: 11.5px;
     }
 }
