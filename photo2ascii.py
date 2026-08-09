@@ -15,8 +15,15 @@ The live site's scene-data.js was produced with:
 build() arguments: photo path, grid cols, grid rows (cols * 9/16 * 0.6 for a
 16:9 crop at a 0.6 character aspect), crop_top (0 = keep the top of the
 photo, 1 = the bottom), a list of green lens-flare centres to heal as
-(x, y, radius) in original-photo pixels, a name and label, and contrast
-(palette bend around mid-grey; below 1.0 soft, above punchy).
+(x, y, radius) in original-photo pixels, a name and label, contrast
+(palette bend around mid-grey; below 1.0 soft, above punchy), and variety.
+
+variety trades a little per-cell accuracy for a more organic texture: at 0
+each contour cell takes the single best-fitting glyph, which lays down long
+identical runs down a slope and reads mechanical; higher values sample among
+near-equal candidates and penalise repeating the neighbour, so the same line
+is drawn with varying characters. 0.6 removes every run of 4+ while costing
+under a point of orientation accuracy.
 
 If the edge-glyph ATLAS order changes, EDGE_CH in scene.js must change with
 it — the two lists are index-matched.
@@ -151,7 +158,8 @@ def heal_green_dot(w, h, px, cx, cy, radius):
 
 # ── Grid sampling ───────────────────────────────────────────────────────
 
-def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
+def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
+          variety=0.6):
     tmp = os.path.join(SCRATCH, '_resize.png')
     subprocess.run(['sips', '-Z', '1100', path, '--out', tmp,
                     '--setProperty', 'format', 'png'],
@@ -266,8 +274,18 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
     DIR_FALLBACK = {'h': 3, 'v': 1, 'd': 2, 'b': 4}   # 1-based atlas index
 
     edge = bytearray(cols * rows)
+    chosen = [None] * (cols * rows)      # glyph char per cell, for run-breaking
     EDGE_THR = 130.0
+
+    def draw(x, y):
+        """Deterministic 0..1 per cell, so builds stay reproducible."""
+        h = (x * 0x27D4EB2D + y * 0x165667B1) & 0xFFFFFFFF
+        h ^= h >> 15
+        h = (h * 0x2545F491) & 0xFFFFFFFF
+        return ((h ^ (h >> 16)) & 0xFFFF) / 65535.0
+
     for gy in range(1, rows - 1):
+        run_ch, run_len = None, 0
         for gx in range(1, cols - 1):
             i = gy * cols + gx
             gxs = (meanL[i - cols + 1] + 2 * meanL[i + 1] + meanL[i + cols + 1]) \
@@ -276,6 +294,7 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
                 - (meanL[i - cols - 1] + 2 * meanL[i - cols] + meanL[i - cols + 1])
             mag = math.hypot(gxs, gys)
             if mag < EDGE_THR:
+                run_ch, run_len = None, 0
                 continue
             theta = math.degrees(math.atan2(gys, gxs)) % 180.0
             if theta < 22.5 or theta >= 157.5:
@@ -310,26 +329,78 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
 
             mn, mx = min(t), max(t)
             if mx - mn < 10.0:
-                edge[i] = DIR_FALLBACK[oclass]
-                continue
-            t = [(v - mn) / (mx - mn) for v in t]
+                # Too flat to shape-match. Any stroke of the right
+                # orientation will do, which is exactly where variety helps:
+                # picking the canonical one every time laid down long
+                # identical runs along soft boundaries.
+                scored = [[0.0 if a_idx + 1 == DIR_FALLBACK[oclass] else 0.06,
+                           a_idx + 1, glyph]
+                          for a_idx, (glyph, _, ac) in enumerate(ATLAS)
+                          if ac == oclass]
+                scored.append([0.10, 0, None])
+            else:
+                t = [(v - mn) / (mx - mn) for v in t]
+                scored = []
+                for a_idx, (glyph, am, ac) in enumerate(ATLAS):
+                    ssd = sum((t[k] - am[k]) ** 2 for k in range(9)) / 9.0
+                    # Two separate costs. A corner glyph has more ink than a
+                    # stroke, so it fits any diffuse gradient blob unless it
+                    # is made to pay — left cheap, corners win on smooth
+                    # slopes and you get a '7' where the ridge simply
+                    # descends. And the Sobel orientation is reliable, so a
+                    # stroke leaning the wrong way has to be a decisively
+                    # better fit to win.
+                    if ac == 'o':
+                        ssd += 0.15
+                    elif ac != oclass:
+                        ssd += 0.32
+                    scored.append([ssd, a_idx + 1, glyph])
 
-            best, best_score = DIR_FALLBACK[oclass] - 1, 1e9
-            for a_idx, (_, am, ac) in enumerate(ATLAS):
-                ssd = sum((t[k] - am[k]) ** 2 for k in range(9)) / 9.0
-                # Two separate costs. A corner glyph has more ink than a
-                # stroke, so it fits any diffuse gradient blob unless it is
-                # made to pay — left cheap, corners win on smooth slopes and
-                # you get a '7' where the ridge simply descends. And the
-                # Sobel orientation is reliable, so a stroke leaning the
-                # wrong way has to be a decisively better fit to win.
-                if ac == 'o':
-                    ssd += 0.15
-                elif ac != oclass:
-                    ssd += 0.32
-                if ssd < best_score:
-                    best, best_score = a_idx, ssd
-            edge[i] = best + 1
+                # Letting an edge cell fall back to the density texture is
+                # itself a candidate — a contour that dissolves here and
+                # there reads as drawn rather than traced.
+                floor = min(s[0] for s in scored)
+                scored.append([floor + 0.16 - 0.10 * variety, 0, None])
+
+            # Break up runs: the same glyph repeated cell after cell down a
+            # slope looks mechanical, and a slightly worse-fitting neighbour
+            # costs little. Raster order means left and above are settled.
+            if variety > 0:
+                up = chosen[i - cols] if gy > 0 else None
+                for s in scored:
+                    if s[2] is None:
+                        continue
+                    if s[2] == run_ch:
+                        # Scale with the run already laid down, so a repeat
+                        # gets harder the longer it has been going.
+                        s[0] += 0.09 * variety * min(run_len, 5)
+                    if s[2] == up:
+                        s[0] += 0.05 * variety
+
+            best = min(s[0] for s in scored)
+            if variety <= 0:
+                pick = min(scored, key=lambda s: s[0])
+            else:
+                # Sample among the near-equal candidates, weighted by fit.
+                tol = 0.015 + 0.075 * variety
+                temp = 0.012 + 0.05 * variety
+                cands = [s for s in scored if s[0] <= best + tol]
+                wts = [math.exp(-(s[0] - best) / temp) for s in cands]
+                r = draw(gx, gy) * sum(wts)
+                acc = 0.0
+                pick = cands[-1]
+                for s, wt in zip(cands, wts):
+                    acc += wt
+                    if r <= acc:
+                        pick = s
+                        break
+
+            edge[i] = pick[1]
+            chosen[i] = pick[2]
+            if pick[2] is not None and pick[2] == run_ch:
+                run_len += 1
+            else:
+                run_ch, run_len = pick[2], 1
     n_edges = sum(1 for e in edge if e)
     from collections import Counter
     top = Counter(ATLAS[e - 1][0] for e in edge if e).most_common(6)
