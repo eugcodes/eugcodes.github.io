@@ -51,28 +51,43 @@ for d, label in (('b', 'downslope \\'), ('d', 'upslope /'), ('h', 'horizontal'),
     if c:
         print(f'  edges running {label:12s}: {"".join(f"{g}x{n} " for g, n in c.most_common(6))}')
 
-# How mechanical does it look? Long unbroken runs of one glyph are the tell.
-runs = collections.Counter()
-longest = 0
-for gy in range(rows):
-    run, prev = 0, None
-    for gx in range(cols):
-        e = edge[gy * cols + gx]
-        g = CH[e] if e else None
-        if g is not None and g == prev:
-            run += 1
-        else:
-            if run >= 2:
-                runs[run] += 1
-                longest = max(longest, run)
-            run = 1 if g is not None else 0
-        prev = g
-    if run >= 2:
-        runs[run] += 1
-        longest = max(longest, run)
+# How mechanical does it look? Long unbroken runs of one glyph are the tell,
+# and they follow the contour — so a diagonal ridge must be walked
+# diagonally. Scanning rows only would miss the very runs that show up
+# most, because a diagonal places one glyph per row at a shifted x.
+def glyph(gx, gy):
+    if not (0 <= gx < cols and 0 <= gy < rows):
+        return None
+    e = edge[gy * cols + gx]
+    return CH[e] if e else None
 
-total_runs = sum(runs.values())
-long_runs = sum(n for r, n in runs.items() if r >= 4)
 print()
-print(f'  repeated-glyph runs (>=2 in a row): {total_runs}, of which >=4 long: {long_runs}')
-print(f'  longest single-glyph run: {longest} cells')
+worst = 0
+for dx, dy, label in ((1, 0, 'horizontal'), (0, 1, 'vertical'),
+                      (1, 1, 'diagonal \\'), (1, -1, 'diagonal /')):
+    runs = collections.Counter()
+    seen = set()
+    for gy in range(rows):
+        for gx in range(cols):
+            if (gx, gy) in seen:
+                continue
+            g = glyph(gx, gy)
+            if g is None:
+                continue
+            # only start a run where the previous cell in this direction differs
+            if glyph(gx - dx, gy - dy) == g:
+                continue
+            n, cx, cy = 0, gx, gy
+            while glyph(cx, cy) == g:
+                seen.add((cx, cy))
+                n += 1
+                cx += dx
+                cy += dy
+            if n >= 2:
+                runs[n] += 1
+    longest = max(runs) if runs else 0
+    worst = max(worst, longest)
+    long_runs = sum(c for r, c in runs.items() if r >= 4)
+    print(f'  runs along {label:12s}: {sum(runs.values()):4d} of 2+, '
+          f'{long_runs:3d} of 4+, longest {longest}')
+print(f'  worst run in any direction: {worst} cells')
