@@ -26,7 +26,7 @@
     /* Shape-matched contour glyphs — order fixed by the converter's atlas. */
     const EDGE_CH = ['', '|', '/', '-', '\\', '_', "'", 'L', 'J', '7', 'r', '(', ')', '^', 'v', 'x'];
 
-    const SHIMMER = 0.42;
+    const SHIMMER = 0.75;
 
     /* ── Noise (drives the shimmer only) ─────────── */
 

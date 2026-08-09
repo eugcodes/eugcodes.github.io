@@ -35,16 +35,17 @@ body {
    instead of rebuilding the whole grid every frame. */
 #scene > div { height: 1em; }
 
-/* Cream veil over the top of the picture, so the type always holds. */
+/* Cream veil over the top of the picture, so the type always holds.
+   Values follow the picker's top-fade 0.45 setting. */
 .scrim {
     position: fixed;
     left: 0;
     right: 0;
     top: 0;
-    height: 47%;
+    height: 46.5%;
     background: linear-gradient(180deg,
-        rgba(236, 235, 225, 0.94) 0%,
-        rgba(236, 235, 225, 0.74) 46%,
+        rgba(236, 235, 225, 0.82) 0%,
+        rgba(236, 235, 225, 0.66) 46%,
         rgba(236, 235, 225, 0) 100%);
     pointer-events: none;
 }

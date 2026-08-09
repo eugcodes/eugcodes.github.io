@@ -9,13 +9,14 @@ The live site's scene-data.js was produced with:
 
     python3 -c "
     import json, photo2ascii as pa
-    s = pa.build('IMG_0752.jpeg', 260, 88, 0.45, [], 'glacier', 'Garibaldi Lake')
+    s = pa.build('IMG_0752.jpeg', 320, 108, 0.45, [], 'glacier', 'Garibaldi Lake', contrast=0.75)
     open('scene-data.js', 'w').write('const SCENE = ' + json.dumps(s, separators=(',', ':')) + ';')"
 
 build() arguments: photo path, grid cols, grid rows (cols * 9/16 * 0.6 for a
 16:9 crop at a 0.6 character aspect), crop_top (0 = keep the top of the
 photo, 1 = the bottom), a list of green lens-flare centres to heal as
-(x, y, radius) in original-photo pixels, then a name and label.
+(x, y, radius) in original-photo pixels, a name and label, and contrast
+(palette bend around mid-grey; below 1.0 soft, above punchy).
 
 If the edge-glyph ATLAS order changes, EDGE_CH in scene.js must change with
 it — the two lists are index-matched.
@@ -146,7 +147,7 @@ def heal_green_dot(w, h, px, cx, cy, radius):
 
 # ── Grid sampling ───────────────────────────────────────────────────────
 
-def build(path, cols, rows, crop_top, flares, out_name, label):
+def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
     tmp = os.path.join(SCRATCH, '_resize.png')
     subprocess.run(['sips', '-Z', '1100', path, '--out', tmp,
                     '--setProperty', 'format', 'png'],
@@ -357,7 +358,11 @@ def build(path, cols, rows, crop_top, flares, out_name, label):
         'label': label,
         'cols': cols,
         'rows': rows,
-        'pal': ['#%02x%02x%02x' % p for p in pal],
+        # Contrast bends the palette around mid-grey — below 1.0 is soft
+        # and hazy, above is deep and punchy. Same formula the picker used.
+        'pal': ['#%02x%02x%02x' % tuple(
+            max(0, min(255, round((c - 128) * contrast + 128))) for c in p
+        ) for p in pal],
         'bg': base64.b64encode(bytes(dithered(bg_col))).decode(),
         'fg': base64.b64encode(bytes(dithered(fg_col))).decode(),
         'cov': base64.b64encode(bytes(cov)).decode(),
