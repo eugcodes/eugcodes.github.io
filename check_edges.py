@@ -50,3 +50,29 @@ for d, label in (('b', 'downslope \\'), ('d', 'upslope /'), ('h', 'horizontal'),
     c = glyph_by_dir[d]
     if c:
         print(f'  edges running {label:12s}: {"".join(f"{g}x{n} " for g, n in c.most_common(6))}')
+
+# How mechanical does it look? Long unbroken runs of one glyph are the tell.
+runs = collections.Counter()
+longest = 0
+for gy in range(rows):
+    run, prev = 0, None
+    for gx in range(cols):
+        e = edge[gy * cols + gx]
+        g = CH[e] if e else None
+        if g is not None and g == prev:
+            run += 1
+        else:
+            if run >= 2:
+                runs[run] += 1
+                longest = max(longest, run)
+            run = 1 if g is not None else 0
+        prev = g
+    if run >= 2:
+        runs[run] += 1
+        longest = max(longest, run)
+
+total_runs = sum(runs.values())
+long_runs = sum(n for r, n in runs.items() if r >= 4)
+print()
+print(f'  repeated-glyph runs (>=2 in a row): {total_runs}, of which >=4 long: {long_runs}')
+print(f'  longest single-glyph run: {longest} cells')
