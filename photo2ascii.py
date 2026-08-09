@@ -20,6 +20,10 @@ photo, 1 = the bottom), a list of green lens-flare centres to heal as
 
 If the edge-glyph ATLAS order changes, EDGE_CH in scene.js must change with
 it — the two lists are index-matched.
+
+check_edges.py verifies the edge pass: it recomputes each cell's orientation
+from the shipped data and reports how often the chosen stroke leans the same
+way. Run it after touching the ATLAS or the penalties below.
 """
 
 import base64
@@ -174,10 +178,15 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
     # minority colour (ink). The glyph drawn on top encodes how much of
     # the cell the ink covers, so detail survives in both polarities —
     # dark trees on bright sky and bright snow on dark rock alike.
+    # Whole-frame luminance, reused by the sub-cell edge pass below.
+    lumimg = bytearray(w * h)
+    for i in range(w * h):
+        j = i * 3
+        lumimg[i] = int(0.2126 * px[j] + 0.7152 * px[j + 1] + 0.0722 * px[j + 2])
+
     bg_col, fg_col = [], []
     cov = bytearray(cols * rows)
     meanL = [0.0] * (cols * rows)
-    masks = [None] * (cols * rows)   # 3x3 ink distribution per cell
 
     def satboost(c, k=0.35):
         g = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
@@ -189,22 +198,13 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
             x0 = ox + int(gx * cw / cols)
             x1 = max(x0 + 1, ox + int((gx + 1) * cw / cols))
             pix = []
-            bins = [[0.0, 0] for _ in range(9)]
             for y in range(y0, y1):
                 base = y * w
-                by = min(2, (y - y0) * 3 // max(1, y1 - y0))
                 for x in range(x0, x1):
                     i = (base + x) * 3
                     r, g, b = px[i], px[i + 1], px[i + 2]
-                    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-                    pix.append((lum, r, g, b))
-                    bx = min(2, (x - x0) * 3 // max(1, x1 - x0))
-                    cell = bins[by * 3 + bx]
-                    cell[0] += lum; cell[1] += 1
+                    pix.append((0.2126 * r + 0.7152 * g + 0.0722 * b, r, g, b))
             mean = sum(p[0] for p in pix) / len(pix)
-            masks[gy * cols + gx] = [
-                (s / n if n else mean) for (s, n) in bins
-            ]
             meanL[gy * cols + gx] = mean
             dark = [p for p in pix if p[0] < mean]
             brt = [p for p in pix if p[0] >= mean]
@@ -287,12 +287,29 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
             else:
                 oclass = 'b'
 
-            # Ink distribution: deviation of each 3x3 bin from the paper
-            # tone, so bright cracks on dark rock match just as well.
-            pl = 0.2126 * bg_col[i][0] + 0.7152 * bg_col[i][1] + 0.0722 * bg_col[i][2]
-            t = [abs(v - pl) for v in masks[i]]
+            # Where does the boundary actually RUN inside this cell? Bin the
+            # sub-cell gradient magnitude into 3x3. This must come from the
+            # edge itself, not from which side the ink fills: a filled top
+            # half matches a glyph with a full top row (like '7') no matter
+            # which way the slope runs, which picked strokes that leaned the
+            # wrong way.
+            bx0, bx1 = ox + int(gx * cw / cols), max(1, ox + int((gx + 1) * cw / cols))
+            by0, by1 = oy + int(gy * ch / rows), max(1, oy + int((gy + 1) * ch / rows))
+            acc = [0.0] * 9
+            cnt = [0] * 9
+            for yy in range(max(1, by0), min(h - 1, max(by0 + 1, by1))):
+                rw = yy * w
+                bi = min(2, (yy - by0) * 3 // max(1, by1 - by0)) * 3
+                for xx in range(max(1, bx0), min(w - 1, max(bx0 + 1, bx1))):
+                    g = (abs(lumimg[rw + xx + 1] - lumimg[rw + xx - 1]) +
+                         abs(lumimg[rw + w + xx] - lumimg[rw - w + xx]))
+                    k = bi + min(2, (xx - bx0) * 3 // max(1, bx1 - bx0))
+                    acc[k] += g
+                    cnt[k] += 1
+            t = [acc[k] / cnt[k] if cnt[k] else 0.0 for k in range(9)]
+
             mn, mx = min(t), max(t)
-            if mx - mn < 8.0:
+            if mx - mn < 10.0:
                 edge[i] = DIR_FALLBACK[oclass]
                 continue
             t = [(v - mn) / (mx - mn) for v in t]
@@ -300,10 +317,16 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0):
             best, best_score = DIR_FALLBACK[oclass] - 1, 1e9
             for a_idx, (_, am, ac) in enumerate(ATLAS):
                 ssd = sum((t[k] - am[k]) ** 2 for k in range(9)) / 9.0
+                # Two separate costs. A corner glyph has more ink than a
+                # stroke, so it fits any diffuse gradient blob unless it is
+                # made to pay — left cheap, corners win on smooth slopes and
+                # you get a '7' where the ridge simply descends. And the
+                # Sobel orientation is reliable, so a stroke leaning the
+                # wrong way has to be a decisively better fit to win.
                 if ac == 'o':
-                    ssd += 0.03
+                    ssd += 0.15
                 elif ac != oclass:
-                    ssd += 0.18
+                    ssd += 0.32
                 if ssd < best_score:
                     best, best_score = a_idx, ssd
             edge[i] = best + 1
