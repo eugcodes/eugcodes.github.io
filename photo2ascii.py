@@ -159,7 +159,7 @@ def heal_green_dot(w, h, px, cx, cy, radius):
 # ── Grid sampling ───────────────────────────────────────────────────────
 
 def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
-          variety=0.6):
+          variety=0.7):
     tmp = os.path.join(SCRATCH, '_resize.png')
     subprocess.run(['sips', '-Z', '1100', path, '--out', tmp,
                     '--setProperty', 'format', 'png'],
@@ -275,7 +275,27 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
 
     edge = bytearray(cols * rows)
     chosen = [None] * (cols * rows)      # glyph char per cell, for run-breaking
+    runlen = [0] * (cols * rows)         # how long the run reaching this cell is
     EDGE_THR = 130.0
+
+    # Already-decided neighbours, in raster order: left, up-left, up, up-right.
+    # A run follows the contour, so a diagonal ridge repeats into the cell
+    # above-left or above-right, never the one to the left. Checking only
+    # along the row leaves diagonal runs completely unbroken.
+    NEIGH = ((-1, 0), (-1, -1), (0, -1), (1, -1))
+
+    def run_before(gx, gy, glyph):
+        """Longest run of `glyph` arriving at this cell from any direction."""
+        if glyph is None:
+            return 0
+        longest = 0
+        for dx, dy in NEIGH:
+            nx, ny = gx + dx, gy + dy
+            if 0 <= nx < cols and 0 <= ny < rows:
+                ni = ny * cols + nx
+                if chosen[ni] == glyph and runlen[ni] > longest:
+                    longest = runlen[ni]
+        return longest
 
     def draw(x, y):
         """Deterministic 0..1 per cell, so builds stay reproducible."""
@@ -285,7 +305,6 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
         return ((h ^ (h >> 16)) & 0xFFFF) / 65535.0
 
     for gy in range(1, rows - 1):
-        run_ch, run_len = None, 0
         for gx in range(1, cols - 1):
             i = gy * cols + gx
             gxs = (meanL[i - cols + 1] + 2 * meanL[i + 1] + meanL[i + cols + 1]) \
@@ -294,7 +313,6 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
                 - (meanL[i - cols - 1] + 2 * meanL[i - cols] + meanL[i - cols + 1])
             mag = math.hypot(gxs, gys)
             if mag < EDGE_THR:
-                run_ch, run_len = None, 0
                 continue
             theta = math.degrees(math.atan2(gys, gxs)) % 180.0
             if theta < 22.5 or theta >= 157.5:
@@ -366,16 +384,14 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
             # slope looks mechanical, and a slightly worse-fitting neighbour
             # costs little. Raster order means left and above are settled.
             if variety > 0:
-                up = chosen[i - cols] if gy > 0 else None
                 for s in scored:
                     if s[2] is None:
                         continue
-                    if s[2] == run_ch:
-                        # Scale with the run already laid down, so a repeat
-                        # gets harder the longer it has been going.
-                        s[0] += 0.09 * variety * min(run_len, 5)
-                    if s[2] == up:
-                        s[0] += 0.05 * variety
+                    # Scale with the run already laid down, so a repeat gets
+                    # harder the longer the contour has been drawn with it.
+                    rl = run_before(gx, gy, s[2])
+                    if rl:
+                        s[0] += 0.085 * variety * min(rl, 6)
 
             best = min(s[0] for s in scored)
             if variety <= 0:
@@ -397,10 +413,7 @@ def build(path, cols, rows, crop_top, flares, out_name, label, contrast=1.0,
 
             edge[i] = pick[1]
             chosen[i] = pick[2]
-            if pick[2] is not None and pick[2] == run_ch:
-                run_len += 1
-            else:
-                run_ch, run_len = pick[2], 1
+            runlen[i] = run_before(gx, gy, pick[2]) + 1 if pick[2] is not None else 0
     n_edges = sum(1 for e in edge if e)
     from collections import Counter
     top = Counter(ATLAS[e - 1][0] for e in edge if e).most_common(6)
