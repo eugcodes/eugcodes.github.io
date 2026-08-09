@@ -13,7 +13,7 @@ body {
     /* Matches the artwork's cream paper, so there is no flash before paint. */
     background: #ecebe1;
     color: #14160f;
-    font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+    font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -90,9 +90,9 @@ body {
 }
 
 .contact-email {
-    font-size: clamp(12px, 0.95vw, 14px);
-    font-weight: 420;
-    letter-spacing: 0.02em;
+    font-size: clamp(11.5px, 0.9vw, 13.5px);
+    font-weight: 400;
+    letter-spacing: 0.01em;
 }
 
 .contact-email:visited {
@@ -111,22 +111,23 @@ body {
 /* ── Identity ────────────────────────────────── */
 
 .identity h1 {
-    font-size: clamp(34px, 4.3vw, 64px);
-    font-weight: 420;
-    font-variation-settings: 'opsz' 100;
-    line-height: 1;
-    letter-spacing: -0.03em;
+    font-size: clamp(31px, 3.7vw, 54px);
+    font-weight: 400;
+    /* Mid optical size: the display cut's hairlines read as mannered here. */
+    font-variation-settings: 'opsz' 40;
+    line-height: 1.04;
+    letter-spacing: -0.012em;
     color: #14160f;
     text-wrap: balance;
 }
 
 .identity p {
-    margin-top: clamp(8px, 0.95vw, 14px);
-    font-size: clamp(10px, 0.84vw, 12.5px);
-    font-weight: 560;
-    letter-spacing: 0.18em;
+    margin-top: clamp(8px, 0.9vw, 13px);
+    font-size: clamp(9.5px, 0.78vw, 11.5px);
+    font-weight: 500;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: rgba(20, 22, 15, 0.58);
+    color: rgba(20, 22, 15, 0.6);
 }
 
 /* ── Small screens ───────────────────────────── */
