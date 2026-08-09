@@ -97,8 +97,12 @@
                 cover += n * SHIMMER * 0.55 + (sweep - 0.5) * SHIMMER * 0.25;
                 s += RAMP[Math.round(Math.pow(clamp01(cover), 0.85) * LAST)];
             }
-            line += '<span style="color:' + pal[run.fg] +
-                    ';background:' + pal[run.bg] + '">' + s + '</span>';
+            /* The shadow bleeds this run's paper 1px to the right. Any
+               sub-pixel sliver left between cells is filled by its
+               neighbour instead of showing the page through as a seam. */
+            const paper = pal[run.bg];
+            line += '<span style="color:' + pal[run.fg] + ';background:' + paper +
+                    ';box-shadow:1px 0 0 0 ' + paper + '">' + s + '</span>';
         }
         return line;
     }
@@ -121,27 +125,51 @@
 
     let charRatio = 0.6;
 
-    function measureCharRatio() {
+    /* Advance width of one character at a given font size and letter-spacing. */
+    function measureAdvance(fontSize, spacing) {
         const probe = document.createElement('span');
-        probe.textContent = 'MMMMMMMMMM';
+        probe.textContent = 'MMMMMMMMMMMMMMMMMMMM';
         probe.style.cssText =
-            'position:absolute;visibility:hidden;white-space:pre;font-size:100px;line-height:1;';
+            'position:absolute;visibility:hidden;white-space:pre;line-height:1;';
         probe.style.fontFamily = getComputedStyle(host).fontFamily;
+        probe.style.fontSize = fontSize + 'px';
+        probe.style.letterSpacing = (spacing || 0) + 'px';
         document.body.appendChild(probe);
-        const w = probe.getBoundingClientRect().width / 10 / 100;
+        const adv = probe.getBoundingClientRect().width / 20;
         probe.remove();
-        return w > 0.1 ? w : 0.6;
+        return adv;
     }
 
     function size() {
         const doc = document.documentElement;
         const w = doc.clientWidth, h = doc.clientHeight;
-        /* Like background-size: cover — on tall screens the grid overflows
-           horizontally and is centre-cropped, so the type stays legible. */
-        const fs = Math.max(w / (S.cols * charRatio), h / S.rows);
-        const artW = S.cols * charRatio * fs;
-        host.style.fontSize = fs.toFixed(3) + 'px';
-        host.style.left = ((w - artW) / 2).toFixed(1) + 'px';
+
+        /* Whole-pixel cells. A fractional advance leaves a sub-pixel sliver
+           between one cell's background and the next; every row shares the
+           same metrics, so those slivers line up and read as white vertical
+           seams down the picture. Rounding the cell to a whole pixel — and
+           snapping the advance to it with letter-spacing — removes the
+           fractional boundary entirely.
+
+           Sizing still behaves like background-size: cover, so on a tall
+           screen the grid overflows horizontally and is centre-cropped. */
+        let rowH = Math.max(1, Math.ceil(h / S.rows));
+        let cellW = Math.max(1, Math.round(rowH * charRatio));
+        while (cellW * S.cols < w) {
+            rowH += 1;
+            cellW = Math.max(1, Math.round(rowH * charRatio));
+        }
+
+        const fs = cellW / charRatio;
+        /* Browsers quantise the advance (1/64px in Blink), so one pass lands
+           slightly short. Measure with the spacing applied and correct. */
+        let spacing = cellW - measureAdvance(fs, 0);
+        spacing += cellW - measureAdvance(fs, spacing);
+
+        host.style.fontSize = fs.toFixed(4) + 'px';
+        host.style.letterSpacing = spacing.toFixed(4) + 'px';
+        host.style.setProperty('--row-h', rowH + 'px');
+        host.style.left = Math.round((w - cellW * S.cols) / 2) + 'px';
     }
 
     /* ── Loop: refresh a rotating batch of rows ────── */
@@ -192,7 +220,7 @@
         if (reducedMotion()) stop(); else start();
     });
 
-    charRatio = measureCharRatio();
+    charRatio = measureAdvance(100) / 100 || 0.6;
     size();
     buildAll(t);
     start();

@@ -34,16 +34,25 @@ body {
     top: 0;
     left: 0;
     font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
-    line-height: 1;
     white-space: pre;
     user-select: none;
     -webkit-user-select: none;
     text-rendering: optimizeSpeed;
+    /* Nothing may alter a character's advance: the cell width is snapped to
+       a whole pixel with letter-spacing, and a ligature or kern would put
+       the fractional boundary — and its seam — straight back. */
+    font-kerning: none;
+    font-variant-ligatures: none;
+    font-feature-settings: 'liga' 0, 'calt' 0;
 }
 
 /* One element per row, so the animation can refresh a few rows at a time
-   instead of rebuilding the whole grid every frame. */
-#scene > div { height: 1em; }
+   instead of rebuilding the whole grid every frame. Whole-pixel row height
+   for the same reason the cells are whole-pixel wide. */
+#scene > div {
+    height: var(--row-h, 1em);
+    line-height: var(--row-h, 1em);
+}
 
 /* Cream veil over the top of the picture, so the type always holds.
    Values follow the picker's top-fade 0.45 setting. */
