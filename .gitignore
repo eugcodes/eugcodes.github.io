@@ -4,3 +4,6 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# personal photo sources for the ASCII scene (not published)
+IMG_*.jpeg
